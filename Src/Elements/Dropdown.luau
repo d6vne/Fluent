@@ -4,7 +4,6 @@ local Camera = game:GetService("Workspace").CurrentCamera
 
 local Root = script.Parent.Parent
 local Creator = require(Root.Modules.Creator)
-local Flipper = require(Root.Packages.Flipper)
 
 local New = Creator.New
 local Components = Root.Components
@@ -15,6 +14,7 @@ Element.__type = "Dropdown"
 
 function Element:New(Idx, Config)
 	local Library = self.Library
+	local DropdownSignals = {}
 
 	local Dropdown = {
 		Values = (function()
@@ -247,6 +247,14 @@ function Element:New(Idx, Config)
 
 	-- Searching only changes visibility; it never recreates option instances.
 	local Buttons = {}
+	local function ClearButtons()
+		for Button, Entry in next, Buttons do
+			Creator.DisconnectOwner(Entry.Connections)
+			Creator.RemoveThemeObject(Button, true)
+			Button:Destroy()
+			Buttons[Button] = nil
+		end
+	end
 	local ListBuilt = false
 	local ListDirty = true
 	local function RepopulateDropdownList()
@@ -265,14 +273,14 @@ function Element:New(Idx, Config)
 	RecalculateListPosition()
 	RecalculateListSize()
 
-	Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition)
-	Creator.AddSignal(SearchBox:GetPropertyChangedSignal("Text"), RepopulateDropdownList)
+	Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition, DropdownSignals)
+	Creator.AddSignal(SearchBox:GetPropertyChangedSignal("Text"), RepopulateDropdownList, DropdownSignals)
 	Creator.AddSignal(DropdownListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 		if ListBuilt then
 			RecalculateCanvasSize()
 			RecalculateListSize()
 		end
-	end)
+	end, DropdownSignals)
 
 	local ScrollFrame = self.ScrollFrame
 	function Dropdown:Open()
@@ -307,9 +315,12 @@ function Element:New(Idx, Config)
 
 	Creator.AddSignal(DropdownInner.MouseButton1Click, function()
 		Dropdown:Open()
-	end)
+	end, DropdownSignals)
 
 	Creator.AddSignal(UserInputService.InputBegan, function(Input)
+		if not Dropdown.Opened then
+			return
+		end
 		if
 			Input.UserInputType == Enum.UserInputType.MouseButton1
 			or Input.UserInputType == Enum.UserInputType.Touch
@@ -324,7 +335,7 @@ function Element:New(Idx, Config)
 				Dropdown:Close()
 			end
 		end
-	end)
+	end, DropdownSignals)
 
 	function Dropdown:Display()
 		local Values = Dropdown.Values
@@ -371,21 +382,14 @@ function Element:New(Idx, Config)
 	function Dropdown:BuildDropdownList()
 		local Values = Dropdown.Values
 
-		for Button, Entry in next, Buttons do
-			if Entry.Connection then
-				Entry.Connection:Disconnect()
-			end
-			Creator.RemoveThemeObject(Button, true)
-			Button:Destroy()
-			Buttons[Button] = nil
-		end
+		ClearButtons()
 
 		ListBuilt = true
 		ListDirty = false
 
 		for Idx, Value in next, Values do
 
-			local Table = {}
+			local Table = { Connections = {} }
 			local Selected
 
 			local Button = Button_BuildList:Clone()
@@ -409,29 +413,28 @@ function Element:New(Idx, Config)
 				Selected = Dropdown.Value == Value
 			end
 
-			local BackMotor, SetBackTransparency = Creator.SpringMotor(1, Button, "BackgroundTransparency")
-			local SelMotor, SetSelTransparency = Creator.SpringMotor(1, ButtonSelector, "BackgroundTransparency")
-			local SelectorSizeMotor = Flipper.SingleMotor.new(6)
-
-			SelectorSizeMotor:onStep(function(value)
-				ButtonSelector.Size = UDim2.new(0, 4, 0, value)
-			end)
+			local function SetBackTransparency(Value)
+				Button.BackgroundTransparency = Value
+			end
+			local function SetSelTransparency(Value)
+				ButtonSelector.BackgroundTransparency = Value
+			end
 
 			Creator.AddSignal(Button.MouseEnter, function()
 				SetBackTransparency(Selected and 0.85 or 0.89)
-			end)
+			end, Table.Connections)
 
 			Creator.AddSignal(Button.MouseLeave, function()
 				SetBackTransparency(Selected and 0.89 or 1)
-			end)
+			end, Table.Connections)
 
 			Creator.AddSignal(Button.MouseButton1Down, function()
 				SetBackTransparency(0.92)
-			end)
+			end, Table.Connections)
 
 			Creator.AddSignal(Button.MouseButton1Up, function()
 				SetBackTransparency(Selected and 0.85 or 0.89)
-			end)
+			end, Table.Connections)
 
 			function Table:UpdateButton()
 				if Config.Multi then
@@ -444,11 +447,11 @@ function Element:New(Idx, Config)
 					SetBackTransparency(Selected and 0.89 or 1)
 				end
 
-				SelectorSizeMotor:setGoal(Flipper.Spring.new(Selected and 14 or 6, { frequency = 6 }))
+				ButtonSelector.Size = UDim2.fromOffset(4, Selected and 14 or 6)
 				SetSelTransparency(Selected and 0 or 1)
 			end
 
-			Table.Connection = ButtonLabel.InputBegan:Connect(function(Input)
+			Creator.AddSignal(ButtonLabel.InputBegan, function(Input)
 				if
 					Input.UserInputType == Enum.UserInputType.MouseButton1
 					or Input.UserInputType == Enum.UserInputType.Touch
@@ -476,13 +479,12 @@ function Element:New(Idx, Config)
 						Dropdown:Display()
 					end
 				end
-			end)
+			end, Table.Connections)
 
 			ButtonLabel.Text = Dropdown.Displayer(Value)
 			Button.Parent = DropdownScrollFrame
 
 			Table:UpdateButton()
-			Dropdown:Display()
 
 			Table.SearchText = string.lower(tostring(Dropdown.Displayer(Value)))
 			Buttons[Button] = Table
@@ -555,14 +557,9 @@ function Element:New(Idx, Config)
 	end
 
 	function Dropdown:Destroy()
-		for Button, Entry in next, Buttons do
-			if Entry.Connection then
-				Entry.Connection:Disconnect()
-			end
-			Creator.RemoveThemeObject(Button, true)
-			Button:Destroy()
-			Buttons[Button] = nil
-		end
+		Dropdown.Opened = false
+		Creator.DisconnectOwner(DropdownSignals)
+		ClearButtons()
 
 		for Index, Frame in ipairs(Library.OpenFrames) do
 			if Frame == DropdownHolderCanvas then
@@ -572,6 +569,8 @@ function Element:New(Idx, Config)
 		end
 
 		Creator.RemoveThemeObject(DropdownHolderCanvas, true)
+		Creator.RemoveThemeObject(Button_BuildList, true)
+		Creator.RemoveThemeObject(DropdownFrame.Frame, true)
 		DropdownHolderCanvas:Destroy()
 		Button_BuildList:Destroy()
 		DropdownFrame:Destroy()
