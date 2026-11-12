@@ -151,31 +151,47 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	local Settings = self.Settings
 	self:LoadSettings()
 
-	if not table.find(Library.Themes, Settings.Theme) then
-		Settings.Theme = Library.Theme
+	-- Legacy presets that were removed migrate cleanly to Dark.
+	if Settings.Theme ~= "Custom" and not table.find(Library.Themes, Settings.Theme) then
+		Settings.Theme = "Dark"
 	end
 	ApplyCustomPalette(Library, Settings.CustomPalette)
 	Library:SetTheme(Settings.Theme)
 
+	local Presets = table.clone(Library.Themes)
+	if Settings.Theme == "Custom" then Presets[#Presets + 1] = "Custom" end
+
 	local Section = Tab:AddSection("Appearance")
 	local ThemeOption = Section:AddDropdown("InterfaceManager_InterfaceTheme", {
 		Title = "Theme",
-		Values = Library.Themes,
-		Searchable = true,
+		Values = Presets,
+		Searchable = false,
+		ImmediateCallback = true,
 		Default = Settings.Theme,
 		Callback = function(Value)
-			if typeof(Value) ~= "string" or not table.find(Library.Themes, Value) then return end
+			if typeof(Value) ~= "string" then return end
+			if Value ~= "Custom" and not table.find(Library.Themes, Value) then return end
+			-- Synchronous application fixes stale outer paint when selecting a
+			-- different preset. Persistence is not needed to refresh the UI.
 			Library:SetTheme(Value)
 			Settings.Theme = Value
 			InterfaceManager:SaveSettings()
 		end,
 	})
 
+	local function ShowCustomTheme()
+		if not table.find(ThemeOption.Values, "Custom") then
+			local Values = table.clone(Library.Themes)
+			Values[#Values + 1] = "Custom"
+			ThemeOption:SetValues(Values)
+		end
+		ThemeOption:SetValue("Custom")
+	end
+
 	-- Five semantic colors instead of 35+ low-level engine properties.
 	-- They remain hidden unless someone explicitly chooses to customize.
 	local EditorOpen = false
 	local Pickers = {}
-	local IgnoreNextColor = {}
 	local ResetButton
 
 	local EditorButton = Section:AddButton({
@@ -191,32 +207,20 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 
 	for _, Item in ipairs(PaletteOptions) do
 		local Key = Item.Key
-		local FirstCallback = true
 		local Picker = Section:AddColorpicker("InterfaceManager_" .. Key, {
 			Title = Item.Title,
 			Default = ReadPaletteColor(Settings.CustomPalette, Key, OriginalPalette[Key]),
 			UpdateOnChange = false,
+			ImmediateCallback = true,
 			Callback = function(Value)
-				-- A colorpicker invokes its callback during creation. That is not
-				-- a user edit and must not switch the theme or write settings.
-				if FirstCallback then
-					FirstCallback = false
-					return
-				end
-				if IgnoreNextColor[Key] == Value then
-					IgnoreNextColor[Key] = nil
-					return
-				end
 				if typeof(Value) ~= "Color3" then return end
 				local Hex = Value:ToHex()
-				if Settings.CustomPalette[Key] == Hex then return end
-
+				-- The picker reports its initial value and even canceled dialogs.
+				-- No palette change means no theme update or filesystem write.
+				if string.upper(Settings.CustomPalette[Key] or "") == Hex then return end
 				Settings.CustomPalette[Key] = Hex
 				ApplyCustomPalette(Library, Settings.CustomPalette)
-				Settings.Theme = "Custom"
-				ThemeOption:SetValue("Custom")
-				Library:SetTheme("Custom")
-				InterfaceManager:SaveSettings()
+				ShowCustomTheme()
 			end,
 		})
 		Picker:SetVisibility(false)
@@ -228,15 +232,11 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		Callback = function()
 			Settings.CustomPalette = table.clone(OriginalPalette)
 			ApplyCustomPalette(Library, Settings.CustomPalette)
-			Settings.Theme = "Custom"
 			for _, Item in ipairs(PaletteOptions) do
 				local Color = Color3.fromHex(OriginalPalette[Item.Key])
-				IgnoreNextColor[Item.Key] = Color
 				Pickers[Item.Key]:SetValueRGB(Color, 0)
 			end
-			ThemeOption:SetValue("Custom")
-			Library:SetTheme("Custom")
-			InterfaceManager:SaveSettings()
+			ShowCustomTheme()
 		end,
 	})
 	ResetButton.Frame.Visible = false

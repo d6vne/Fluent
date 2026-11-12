@@ -529,7 +529,16 @@ function Element:New(Idx, Config)
 		end
 		Dropdown:RefreshButtons()
 		Dropdown:Display()
-		if typeof(Dropdown.Callback) == "function" then Library:SafeCallback(Dropdown.Callback, Dropdown.Value) end
+		if typeof(Dropdown.Callback) == "function" then
+			if Config.ImmediateCallback then
+				-- A theme switch should be reflected in the same input event; do
+				-- not queue multiple asynchronous theme callbacks out of order.
+				local Success, Err = pcall(Dropdown.Callback, Dropdown.Value)
+				if not Success then warn("[Fluent] Dropdown callback:", Err) end
+			else
+				Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
+			end
+		end
 		if typeof(Dropdown.Changed) == "function" then Library:SafeCallback(Dropdown.Changed, Dropdown.Value) end
 	end
 

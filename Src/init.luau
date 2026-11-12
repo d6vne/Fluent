@@ -358,11 +358,15 @@ function Library:CreateWindow(Config)
 end
 
 function Library:SetTheme(Name: string)
-	if Library.CreatedWindow and table.find(Library.Themes, Name) then
-		Library.Theme = Name
-		Creator.UpdateTheme()
-		Library.ThemeChanged:Fire(Name)
-	end
+	if Library.Unloaded or not Library.CreatedWindow then return end
+	-- Custom is the editor's runtime palette, not a built-in preset.
+	if Name ~= "Custom" and not table.find(Library.Themes, Name) then return end
+	if not Themes[Name] then return end
+	Library.Theme = Name
+	-- Apply every registered theme property immediately, including outer paint,
+	-- gradients and strokes. Never defer the main theme switch.
+	Creator.UpdateTheme()
+	Library.ThemeChanged:Fire(Name)
 end
 
 function Library:Destroy()
@@ -409,6 +413,7 @@ end
 
 function Library:ToggleTransparency(Value: boolean)
 	if Library.CreatedWindow then
+		Library.Transparency = Value
 		Library.CreatedWindow.AcrylicPaint.Frame.Background.BackgroundTransparency = Value and 0.35 or 0
 	end
 end
