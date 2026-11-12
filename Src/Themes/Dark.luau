@@ -41,6 +41,8 @@ return {
 
 	Text = Color3.fromRGB(240, 240, 240),
 	SubText = Color3.fromRGB(170, 170, 170),
+	-- Preserve the subdued subtitle on dark presets.
+	SubtitleTransparency = 0.4,
 	Hover = Color3.fromRGB(120, 120, 120),
 	HoverChange = 0.07
 }
