@@ -29,6 +29,24 @@ local function GetDefaultPalette(Library)
 	}
 end
 
+-- The editor swatches always describe the ACTIVE theme. Stored Custom colors
+-- are deliberately separate so choosing a preset cannot overwrite them.
+local function GetVisiblePalette(Library, ThemeName, CustomPalette)
+	if ThemeName == "Custom" then
+		return table.clone(CustomPalette)
+	end
+
+	local Theme = Library.Utilities.Themes[ThemeName] or Library.Utilities.Themes.Dark
+	return {
+		FontColor = Theme.Text:ToHex(),
+		MainColor = Theme.Element:ToHex(),
+		AccentColor = Theme.Accent:ToHex(),
+		-- Use the actual window background/border tokens, not dialog colors.
+		BackgroundColor = Theme.AcrylicMain:ToHex(),
+		OutlineColor = Theme.AcrylicBorder:ToHex(),
+	}
+end
+
 local function ReadPaletteColor(Palette, Key, Fallback)
 	local Value = Palette and Palette[Key]
 	if typeof(Value) == "string" then
@@ -162,6 +180,25 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	if Settings.Theme == "Custom" then Presets[#Presets + 1] = "Custom" end
 
 	local Section = Tab:AddSection("Appearance")
+	local Pickers = {}
+	local SyncingPickers = false
+	local InitialPalette = GetVisiblePalette(Library, Settings.Theme, Settings.CustomPalette)
+
+	local function SyncPalettePickers(ThemeName)
+		local Palette = GetVisiblePalette(Library, ThemeName, Settings.CustomPalette)
+		SyncingPickers = true
+		for _, Item in ipairs(PaletteOptions) do
+			local Picker = Pickers[Item.Key]
+			if Picker then
+				local Color = ReadPaletteColor(Palette, Item.Key, OriginalPalette[Item.Key])
+				if Picker.Value:ToHex() ~= Color:ToHex() then
+					Picker:SetValueRGB(Color, 0)
+				end
+			end
+		end
+		SyncingPickers = false
+	end
+
 	local ThemeOption = Section:AddDropdown("InterfaceManager_InterfaceTheme", {
 		Title = "Theme",
 		Values = Presets,
@@ -171,10 +208,12 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		Callback = function(Value)
 			if typeof(Value) ~= "string" then return end
 			if Value ~= "Custom" and not table.find(Library.Themes, Value) then return end
-			-- Synchronous application fixes stale outer paint when selecting a
-			-- different preset. Persistence is not needed to refresh the UI.
-			Library:SetTheme(Value)
 			Settings.Theme = Value
+			if Value == "Custom" then
+				ApplyCustomPalette(Library, Settings.CustomPalette)
+			end
+			Library:SetTheme(Value)
+			SyncPalettePickers(Value)
 			InterfaceManager:SaveSettings()
 		end,
 	})
@@ -191,7 +230,6 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	-- Five semantic colors instead of 35+ low-level engine properties.
 	-- They remain hidden unless someone explicitly chooses to customize.
 	local EditorOpen = false
-	local Pickers = {}
 	local ResetButton
 
 	local EditorButton = Section:AddButton({
@@ -209,15 +247,22 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		local Key = Item.Key
 		local Picker = Section:AddColorpicker("InterfaceManager_" .. Key, {
 			Title = Item.Title,
-			Default = ReadPaletteColor(Settings.CustomPalette, Key, OriginalPalette[Key]),
+			Default = ReadPaletteColor(InitialPalette, Key, OriginalPalette[Key]),
 			UpdateOnChange = false,
 			ImmediateCallback = true,
 			Callback = function(Value)
-				if typeof(Value) ~= "Color3" then return end
+				if SyncingPickers or typeof(Value) ~= "Color3" then return end
 				local Hex = Value:ToHex()
-				-- The picker reports its initial value and even canceled dialogs.
-				-- No palette change means no theme update or filesystem write.
-				if string.upper(Settings.CustomPalette[Key] or "") == Hex then return end
+				local ActivePalette = GetVisiblePalette(Library, Settings.Theme, Settings.CustomPalette)
+				-- Initial, programmatic, and canceled edits must never change the
+				-- selected theme or overwrite the saved Custom palette.
+				if string.upper(ActivePalette[Key] or "") == Hex then return end
+
+				-- Editing a preset starts a NEW Custom palette based on the colors
+				-- the user actually sees, not an unrelated previously saved palette.
+				if Settings.Theme ~= "Custom" then
+					Settings.CustomPalette = table.clone(ActivePalette)
+				end
 				Settings.CustomPalette[Key] = Hex
 				ApplyCustomPalette(Library, Settings.CustomPalette)
 				ShowCustomTheme()
@@ -232,14 +277,12 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		Callback = function()
 			Settings.CustomPalette = table.clone(OriginalPalette)
 			ApplyCustomPalette(Library, Settings.CustomPalette)
-			for _, Item in ipairs(PaletteOptions) do
-				local Color = Color3.fromHex(OriginalPalette[Item.Key])
-				Pickers[Item.Key]:SetValueRGB(Color, 0)
-			end
+			-- Switching to Custom synchronizes all five controls in one pass.
 			ShowCustomTheme()
 		end,
 	})
 	ResetButton.Frame.Visible = false
+	SyncPalettePickers(Settings.Theme)
 
 	if Library.UseAcrylic then
 		Section:AddToggle("InterfaceManager_AcrylicToggle", {
