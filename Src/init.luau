@@ -50,6 +50,7 @@ local Root = script
 local Components = Root.Components
 
 local Creator = require(Root.Modules.Creator)
+local InputRouter = require(Root.Modules.InputRouter)
 local ElementsTable = require(Root.Elements)
 local Acrylic = require(Root.Modules.Acrylic)
 local Icons = require(Root.Modules.Icons)
@@ -378,6 +379,7 @@ function Library:Destroy()
 	end
 
 	Creator.Disconnect()
+	InputRouter.Destroy()
 	-- Avoid scheduling one tween per descendant during unload.
 	Library.GUI:Destroy()
 	table.clear(Library.OpenFrames)
