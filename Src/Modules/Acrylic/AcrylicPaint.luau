@@ -47,6 +47,9 @@ return function(props)
 		}),
 
 		New("Frame", {
+			-- White is intentional here: UIGradient multiplies this color by
+			-- the active theme's AcrylicGradient. This layer is not a white tint.
+			Name = "GradientOverlay",
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BackgroundTransparency = 0.4,
 			Size = UDim2.fromScale(1, 1),
