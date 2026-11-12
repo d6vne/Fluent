@@ -14,8 +14,12 @@ return {
 	InElementBorder = Color3.fromHex("94A3B8"),
 	ElementTransparency = 0.25,
 
-	ToggleSlider = Color3.fromHex("94A3B8"),
+	-- Dark inactive switch and distinct white knob on the blue active track.
+	ToggleSlider = Color3.fromHex("1E293B"),
 	ToggleToggled = Color3.fromRGB(255, 255, 255),
+	ToggleOffTransparency = 0.1,
+	ToggleOnTransparency = 0,
+	ToggleBorderTransparency = 0.15,
 
 	SliderRail = Color3.fromHex("64748B"),
 
