@@ -243,6 +243,11 @@ do
 			"InterfaceManager_AcrylicToggle",
 			"InterfaceManager_TransparentToggle",
 			"InterfaceManager_MenuKeybind",
+			"InterfaceManager_FontColor",
+			"InterfaceManager_MainColor",
+			"InterfaceManager_AccentColor",
+			"InterfaceManager_BackgroundColor",
+			"InterfaceManager_OutlineColor",
 		})
 	end
 
