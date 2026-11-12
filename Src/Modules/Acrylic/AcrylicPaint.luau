@@ -9,9 +9,13 @@ return function(props)
 
 	AcrylicPaint.Frame = New("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 0.9,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		-- This is the actual full-window surface, not a static white backdrop.
+		-- Recolor it together with the controls when the theme changes.
+		BackgroundTransparency = 0.22,
 		BorderSizePixel = 0,
+		ThemeTag = {
+			BackgroundColor3 = "AcrylicMain",
+		},
 	}, {
 		New("ImageLabel", {
 			Image = "rbxassetid://8992230677",
