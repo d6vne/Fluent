@@ -193,10 +193,10 @@ return function(Config)
 		local Now = tick()
 		local DeltaTime = Now - LastTime
 
-		if LastValue ~= nil then
+		if DeltaTime > 0 and LastValue ~= nil then
 			Window.SelectorSizeMotor:setGoal(Spring((math.abs(Value - LastValue) / (DeltaTime * 60)) + 16))
-			LastValue = Value
 		end
+		LastValue = Value
 		LastTime = Now
 	end)
 
