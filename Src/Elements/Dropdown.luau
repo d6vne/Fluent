@@ -26,7 +26,7 @@ function Element:New(Idx, Config)
 
 			return Idxes
 		end)(),
-		Value = Config.Default or Config.Value,
+		Value = Config.Multi and {} or (Config.Default or Config.Value),
 		Multi = Config.Multi or false,
 		AutoDeselect = Config.AutoDeselect or false,
 		AutoRefresh = Config.AutoRefresh or false,
@@ -245,8 +245,21 @@ function Element:New(Idx, Config)
 		DropdownScrollFrame.CanvasSize = UDim2.fromOffset(0, DropdownListLayout.AbsoluteContentSize.Y)
 	end
 
+	-- Searching only changes visibility; it never recreates option instances.
+	local Buttons = {}
+	local ListBuilt = false
+	local ListDirty = true
 	local function RepopulateDropdownList()
-		Dropdown:BuildDropdownList()
+		if not ListBuilt then
+			return
+		end
+
+		local Query = string.lower(SearchBox.Text)
+		for Button, Entry in next, Buttons do
+			Button.Visible = Query == "" or string.find(Entry.SearchText, Query, 1, true) ~= nil
+		end
+		RecalculateCanvasSize()
+		RecalculateListSize()
 	end
 
 	RecalculateListPosition()
@@ -254,17 +267,22 @@ function Element:New(Idx, Config)
 
 	Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition)
 	Creator.AddSignal(SearchBox:GetPropertyChangedSignal("Text"), RepopulateDropdownList)
+	Creator.AddSignal(DropdownListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+		if ListBuilt then
+			RecalculateCanvasSize()
+			RecalculateListSize()
+		end
+	end)
 
 	local ScrollFrame = self.ScrollFrame
 	function Dropdown:Open()
+		if not ListBuilt or ListDirty or Dropdown.AutoRefresh then
+			Dropdown:BuildDropdownList()
+		end
 		Dropdown.Opened = true
 		ScrollFrame.ScrollingEnabled = false
 		DropdownHolderCanvas.Visible = true
 		DropdownHolderFrame:TweenSize(UDim2.fromScale(1, 1), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2)
-
-		if Dropdown.AutoRefresh then
-			RepopulateDropdownList()
-		end
 
 		if Dropdown.Searchable then
 			SearchBox.Text = ""
@@ -340,23 +358,32 @@ function Element:New(Idx, Config)
 		end
 	end
 
-	function Dropdown:BuildDropdownList()
-		local Values = Dropdown.Values
-		local Buttons = {}
-
-		for _, Element in next, DropdownScrollFrame:QueryDescendants(">:not(UIListLayout)") do
-			Element:Destroy()
+	function Dropdown:RefreshButtons()
+		if not ListBuilt then
+			return
 		end
 
-		for Idx, Value in next, Values do
+		for _, Entry in next, Buttons do
+			Entry:UpdateButton()
+		end
+	end
 
-			if
-				Dropdown.Searchable
-				and SearchBox.Text ~= ""
-				and not string.lower(Dropdown.Displayer(Value)):match(string.lower(SearchBox.Text))
-			then
-				continue
+	function Dropdown:BuildDropdownList()
+		local Values = Dropdown.Values
+
+		for Button, Entry in next, Buttons do
+			if Entry.Connection then
+				Entry.Connection:Disconnect()
 			end
+			Creator.RemoveThemeObject(Button, true)
+			Button:Destroy()
+			Buttons[Button] = nil
+		end
+
+		ListBuilt = true
+		ListDirty = false
+
+		for Idx, Value in next, Values do
 
 			local Table = {}
 			local Selected
@@ -364,19 +391,15 @@ function Element:New(Idx, Config)
 			local Button = Button_BuildList:Clone()
 			local ButtonSelector, ButtonLabel = Button:WaitForChild("Frame", 3), Button:WaitForChild("ButtonLabel", 3)
 
-			-- AddThemeObject causes some small stuttering, the reason for that is because of 'Creator.UpdateTheme'
-			-- which is called every single time a dropdown is (re)built.
-			-- I have no idea how to optimize this so suggestions are welcome.
-
-			Creator.Spawn(Creator.AddThemeObject, Button, {
+			-- Theme registration applies just the current instance, without
+			-- scheduling theme-update workers for every dropdown entry.
+			Creator.AddThemeObject(Button, {
 				BackgroundColor3 = "DropdownOption",
 			})
-
-			Creator.Spawn(Creator.AddThemeObject, ButtonSelector, {
+			Creator.AddThemeObject(ButtonSelector, {
 				BackgroundColor3 = "Accent",
 			})
-
-			Creator.Spawn(Creator.AddThemeObject, ButtonLabel, {
+			Creator.AddThemeObject(ButtonLabel, {
 				TextColor3 = "Text",
 			})
 
@@ -425,7 +448,7 @@ function Element:New(Idx, Config)
 				SetSelTransparency(Selected and 0 or 1)
 			end
 
-			ButtonLabel.InputBegan:Connect(function(Input)
+			Table.Connection = ButtonLabel.InputBegan:Connect(function(Input)
 				if
 					Input.UserInputType == Enum.UserInputType.MouseButton1
 					or Input.UserInputType == Enum.UserInputType.Touch
@@ -447,10 +470,6 @@ function Element:New(Idx, Config)
 						else
 							Selected = Try
 							Dropdown:SetValue(Selected and Value or nil)
-
-							for _, OtherButton in next, Buttons do
-								OtherButton:UpdateButton()
-							end
 						end
 
 						Table:UpdateButton()
@@ -465,6 +484,7 @@ function Element:New(Idx, Config)
 			Table:UpdateButton()
 			Dropdown:Display()
 
+			Table.SearchText = string.lower(tostring(Dropdown.Displayer(Value)))
 			Buttons[Button] = Table
 		end
 
@@ -480,8 +500,7 @@ function Element:New(Idx, Config)
 
 		ListSizeX = ListSizeX + 30
 
-		RecalculateCanvasSize()
-		RecalculateListSize()
+		RepopulateDropdownList()
 	end
 
 	function Dropdown:SetValues(NewValues)
@@ -489,7 +508,11 @@ function Element:New(Idx, Config)
 			rawset(Dropdown, "Values", NewValues)
 		end
 
-		Dropdown:BuildDropdownList()
+		ListDirty = true
+		if Dropdown.Opened then
+			Dropdown:BuildDropdownList()
+		end
+		Dropdown:Display()
 	end
 
 	function Dropdown:OnChanged(Func)
@@ -520,7 +543,8 @@ function Element:New(Idx, Config)
 			end
 		end
 
-		Dropdown:BuildDropdownList()
+		Dropdown:RefreshButtons()
+		Dropdown:Display()
 
 		if typeof(Dropdown.Callback) == "function" then
 			Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
@@ -531,11 +555,30 @@ function Element:New(Idx, Config)
 	end
 
 	function Dropdown:Destroy()
+		for Button, Entry in next, Buttons do
+			if Entry.Connection then
+				Entry.Connection:Disconnect()
+			end
+			Creator.RemoveThemeObject(Button, true)
+			Button:Destroy()
+			Buttons[Button] = nil
+		end
+
+		for Index, Frame in ipairs(Library.OpenFrames) do
+			if Frame == DropdownHolderCanvas then
+				table.remove(Library.OpenFrames, Index)
+				break
+			end
+		end
+
+		Creator.RemoveThemeObject(DropdownHolderCanvas, true)
+		DropdownHolderCanvas:Destroy()
+		Button_BuildList:Destroy()
 		DropdownFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
-	Dropdown:BuildDropdownList()
+	-- Selection is initialized without allocating buttons for a closed dropdown.
 	Dropdown:Display()
 
 	local Defaults = {}
@@ -570,7 +613,6 @@ function Element:New(Idx, Config)
 			end
 		end
 
-		Dropdown:BuildDropdownList()
 		Dropdown:Display()
 	end
 
