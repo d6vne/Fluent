@@ -7,7 +7,7 @@ local Themes = {
 setmetatable(Themes, {
 	__index = function(self, Name)
 		local Module = script:FindFirstChild(Name)
-		if not Module or not Module:IsA("ModuleScript") then return nil end
+		if not Module then return nil end
 		local Theme = require(Module)
 		self[Name] = Theme
 		return Theme
