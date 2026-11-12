@@ -430,8 +430,6 @@ function Element:New(Idx, Config)
 		if not ListBuilt or ListDirty or Dropdown.AutoRefresh then
 			Dropdown:BuildDropdownList()
 		end
-		self.Opened = true
-		self.ScrollFrame = DropdownScrollFrame
 		DropdownHolderCanvas.Visible = true
 		self:RefreshButtons()
 		-- The tab's scroll is disabled while a popover has focus.
