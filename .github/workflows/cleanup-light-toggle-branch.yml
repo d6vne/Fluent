@@ -1,0 +1,26 @@
+name: Remove merged Light toggle branch (one-shot)
+
+on:
+  push:
+    branches:
+      - optimization
+    paths:
+      - ".github/workflows/cleanup-light-toggle-branch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.repository == 'd6vne/Fluent'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged light toggle fix branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.git.deleteRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "heads/fix/light-toggle-contrast",
+            });
