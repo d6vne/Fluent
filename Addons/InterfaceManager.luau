@@ -203,9 +203,8 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	Library:ToggleTransparency(Settings.Transparency)
 	if Library.UseAcrylic then Library:ToggleAcrylic(Settings.Acrylic) end
 
-	local Presets = table.clone(Library.Themes)
-	if Settings.Theme == "Custom" then Presets[#Presets + 1] = "Custom" end
-
+	-- The preset picker contains built-in themes ONLY. Custom palettes are
+	-- applied separately through the expandable editor below.
 	local Section = Tab:AddSection("Appearance")
 	local Pickers = {}
 	local SyncingPickers = false
@@ -228,20 +227,16 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 
 	local ThemeOption = Section:AddDropdown("InterfaceManager_InterfaceTheme", {
 		Title = "Theme",
-		Values = Presets,
+		Values = table.clone(Library.Themes),
 		Searchable = false,
 		ImmediateCallback = true,
-		Default = Settings.Theme,
+		-- When Custom is active, no preset is selected; show "--" instead
+		-- of adding a misleading sixth entry to the built-in theme menu.
+		Default = Settings.Theme ~= "Custom" and Settings.Theme or nil,
 		Callback = function(Value)
-			if typeof(Value) ~= "string" then return end
-			if Value ~= "Custom" and not table.find(Library.Themes, Value) then return end
+			if typeof(Value) ~= "string" or not table.find(Library.Themes, Value) then return end
 			Settings.Theme = Value
-			if Value ~= "Custom" then
-				Settings.LastPreset = Value
-			end
-			if Value == "Custom" then
-				ApplyCustomPalette(Library, Settings.CustomPalette)
-			end
+			Settings.LastPreset = Value
 			Library:SetTheme(Value)
 			SyncPalettePickers(Value)
 			InterfaceManager:SaveSettings()
@@ -249,18 +244,21 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	})
 
 	local function ShowCustomTheme()
-		if not table.find(ThemeOption.Values, "Custom") then
-			local Values = table.clone(Library.Themes)
-			Values[#Values + 1] = "Custom"
-			ThemeOption:SetValues(Values)
-		end
-		ThemeOption:SetValue("Custom")
+		Settings.Theme = "Custom"
+		ApplyCustomPalette(Library, Settings.CustomPalette)
+		Library:SetTheme("Custom")
+		-- Clear the preset selection; no extra Custom item in the menu.
+		-- SetValue(nil) invokes the dropdown callback with nil, which is ignored.
+		ThemeOption:SetValue(nil)
+		SyncPalettePickers("Custom")
+		InterfaceManager:SaveSettings()
 	end
 
 	-- Five semantic colors instead of 35+ low-level engine properties.
 	-- They remain hidden unless someone explicitly chooses to customize.
 	local EditorOpen = false
 	local ResetButton
+	local ApplyButton
 
 	local EditorButton = Section:AddButton({
 		Title = "Edit Custom Palette",
@@ -270,6 +268,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 				Picker:SetVisibility(EditorOpen)
 			end
 			if ResetButton then ResetButton.Frame.Visible = EditorOpen end
+			if ApplyButton then ApplyButton.Frame.Visible = EditorOpen end
 		end,
 	})
 
@@ -316,6 +315,14 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		end,
 	})
 	ResetButton.Frame.Visible = false
+
+	-- The stored palette remains accessible even after a preset is selected.
+	-- Applying it doesn't insert Custom into the built-in dropdown.
+	ApplyButton = Section:AddButton({
+		Title = "Apply Custom Palette",
+		Callback = ShowCustomTheme,
+	})
+	ApplyButton.Frame.Visible = false
 	SyncPalettePickers(Settings.Theme)
 
 	if Library.UseAcrylic then
