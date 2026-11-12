@@ -361,11 +361,26 @@ function Library:SetTheme(Name: string)
 	if Library.Unloaded or not Library.CreatedWindow then return end
 	-- Custom is the editor's runtime palette, not a built-in preset.
 	if Name ~= "Custom" and not table.find(Library.Themes, Name) then return end
-	if not Themes[Name] then return end
+	local Theme = Themes[Name]
+	if not Theme then return end
+
 	Library.Theme = Name
-	-- Apply every registered theme property immediately, including outer paint,
-	-- gradients and strokes. Never defer the main theme switch.
+	-- Paint every registered component in one synchronous update.
 	Creator.UpdateTheme()
+
+	-- The full-window surface must always agree with the active theme.
+	-- Explicitly sync the canonical surface instead of relying only on the
+	-- generic registry (which can miss objects removed by legacy callers).
+	local Paint = Library.CreatedWindow.AcrylicPaint
+	if Paint then
+		if Paint.Background and Paint.Background.BackgroundColor3 ~= Theme.AcrylicMain then
+			Paint.Background.BackgroundColor3 = Theme.AcrylicMain
+		end
+		if Paint.Border and Paint.Border.Color ~= Theme.AcrylicBorder then
+			Paint.Border.Color = Theme.AcrylicBorder
+		end
+	end
+
 	Library.ThemeChanged:Fire(Name)
 end
 
