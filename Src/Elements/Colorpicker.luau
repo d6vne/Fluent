@@ -519,11 +519,19 @@ function Element:New(Idx, Config)
 		Display()
 
 		Dialog:Button("Done", function()
-			Colorpicker:SetValue({ Hue, Sat, Vib }, Transparency)
+			local NewColor = Color3.fromHSV(Hue, Sat, Vib)
+			if Colorpicker.Value:ToHex() ~= NewColor:ToHex()
+				or math.abs(Colorpicker.Transparency - Transparency) > 0.0001 then
+				Colorpicker:SetValue({ Hue, Sat, Vib }, Transparency)
+			end
 		end)
 
 		Dialog:Button("Cancel", function()
-			Colorpicker:SetValue({ OrigHue, OrigSat, OrigVib }, OrigTransparency)
+			-- With UpdateOnChange disabled, the picker has not changed yet.
+			-- Calling SetValue here used to fire a false theme edit on Cancel.
+			if Colorpicker.UpdateOnChange then
+				Colorpicker:SetValue({ OrigHue, OrigSat, OrigVib }, OrigTransparency)
+			end
 		end)
 
 		Dialog:Open()
