@@ -237,28 +237,30 @@ function Creator.OverrideTag(Object, Properties)
 	Creator.UpdateTheme(Object)
 end
 
+-- Build an instance off-tree, so property changes do not trigger a full UI layout
+-- until its children and theme tags are ready. Parent is committed last.
 function Creator.New(Name, Properties: { [string]: any }?, Children: { [number]: Instance }?): Instance
 	local Object = Instance.new(Name)
+	local Parent = Properties and Properties.Parent
 
-	-- Default properties
-	for Name, Value in next, Creator.DefaultProperties[Name] or {} do
-		Object[Name] = Value
+	for Property, Value in next, Creator.DefaultProperties[Name] or {} do
+		Object[Property] = Value
 	end
 
-	-- Properties
-	for Name, Value in next, Properties or {} do
-		if Name ~= "ThemeTag" then
-			Object[Name] = Value
+	for Property, Value in next, Properties or {} do
+		if Property ~= "ThemeTag" and Property ~= "Parent" then
+			Object[Property] = Value
 		end
 	end
 
-	-- Children
 	for _, Child in next, Children or {} do
 		Child.Parent = Object
 	end
 
 	ApplyCustomProps(Object, Properties)
-
+	if Parent ~= nil then
+		Object.Parent = Parent
+	end
 	return Object
 end
 
