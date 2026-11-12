@@ -147,6 +147,7 @@ local Library = {
 	UseAcrylic = false,
 	Acrylic = false,
 	Transparency = true,
+	Animations = false,
 	MinimizeKey = Enum.KeyCode.LeftControl,
 
 	GUI = BaseContainer,
@@ -312,6 +313,7 @@ function Library:Window(Config: {
 	Library.UseAcrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Acrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Theme = if typeof(Config.Theme) == "string" then Config.Theme else "Custom"
+	Library.Animations = Config.Animations == true
 
 	if Config.Acrylic then
 		Acrylic.init()
