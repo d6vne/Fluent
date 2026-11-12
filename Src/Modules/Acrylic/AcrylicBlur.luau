@@ -7,6 +7,7 @@ local BlurFolder = Instance.new("Folder", game:GetService("Workspace").CurrentCa
 
 local function createAcrylicBlur(distance)
 	local cleanups = {}
+	local Active = true
 
 	distance = distance or 0.001
 	local positions = {
@@ -26,6 +27,7 @@ local function createAcrylicBlur(distance)
 	end
 
 	local function render()
+		if not Active then return end
 		local camera = game:GetService("Workspace").CurrentCamera
 		local cameraTransform = if camera then camera.CFrame else CFrame.identity
 
@@ -54,7 +56,9 @@ local function createAcrylicBlur(distance)
 		local position = rbx.AbsolutePosition + Vector2.new(offset / 2, offset / 2)
 
 		updatePositions(size, position)
-		Creator.Spawn(render)
+		if Active then
+			Creator.Spawn(render)
+		end
 	end
 
 	local function renderOnChange()
@@ -79,12 +83,17 @@ local function createAcrylicBlur(distance)
 
 	renderOnChange()
 
-	return onChange, model
+	return onChange, model, function(Value)
+		Active = Value
+		if Active then
+			Creator.Spawn(render)
+		end
+	end
 end
 
 return function(distance)
 	local Blur = {}
-	local onChange, model = createAcrylicBlur(distance)
+	local onChange, model, setActive = createAcrylicBlur(distance)
 
 	local comp = Creator.New("Frame", {
 		BackgroundTransparency = 1,
@@ -106,6 +115,7 @@ return function(distance)
 	end
 
 	Blur.SetVisibility = function(Value)
+		setActive(Value)
 		model.Transparency = Value and 1 - 1e-7 or 1
 	end
 
