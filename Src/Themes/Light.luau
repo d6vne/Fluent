@@ -39,8 +39,9 @@ return {
 	DialogInput = Color3.fromHex("F8FAFC"),
 	DialogInputLine = Color3.fromHex("94A3B8"),
 
-	Text = Color3.fromHex("0F172A"),
-	SubText = Color3.fromHex("475569"),
+	-- Consistent black text across titles, labels, sliders and placeholders.
+	Text = Color3.fromRGB(0, 0, 0),
+	SubText = Color3.fromRGB(0, 0, 0),
 	Hover = Color3.fromHex("E2E8F0"),
 	HoverChange = 0.06
 }
