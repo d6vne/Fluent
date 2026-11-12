@@ -38,6 +38,24 @@ function Element:New(Idx, Config)
 	
 	local SliderDots = table.create(DotCount, Null)
 	local Dragging = table.create(DotCount, Null)
+	local SliderSignals = {}
+	local onInputChanged
+	local ActiveTouch, ActiveChange, ActiveEnd
+
+	local function StopDragging()
+		for Index = 1, DotCount do
+			Dragging[Index] = false
+		end
+		ActiveTouch = nil
+		if ActiveChange then
+			ActiveChange:Disconnect()
+			ActiveChange = nil
+		end
+		if ActiveEnd then
+			ActiveEnd:Disconnect()
+			ActiveEnd = nil
+		end
+	end
 	
 	for i = 1, DotCount do
 		
@@ -59,17 +77,32 @@ function Element:New(Idx, Config)
 				or Input.UserInputType == Enum.UserInputType.Touch
 			then
 				Dragging[i] = true
+				ActiveTouch = Input.UserInputType == Enum.UserInputType.Touch and Input or nil
+				if not ActiveChange then
+					ActiveChange = UserInputService.InputChanged:Connect(function(Changed)
+						if (ActiveTouch and Changed == ActiveTouch)
+							or (not ActiveTouch and Changed.UserInputType == Enum.UserInputType.MouseMovement) then
+							onInputChanged(Changed)
+						end
+					end)
+					ActiveEnd = UserInputService.InputEnded:Connect(function(Ended)
+						if (ActiveTouch and Ended == ActiveTouch)
+							or (not ActiveTouch and Ended.UserInputType == Enum.UserInputType.MouseButton1) then
+							StopDragging()
+						end
+					end)
+				end
 			end
-		end)
+		end, SliderSignals)
 
 		Creator.AddSignal(SliderDot.InputEnded, function(Input)
 			if
 				Input.UserInputType == Enum.UserInputType.MouseButton1
 				or Input.UserInputType == Enum.UserInputType.Touch
 			then
-				Dragging[i] = false
+				StopDragging()
 			end
-		end)
+		end, SliderSignals)
 		
 		SliderDots[i] = SliderDot
 	end
@@ -166,13 +199,11 @@ function Element:New(Idx, Config)
 		end
 	end
 	
-	local onInputChanged
-	
 	if Slider.Ranged then
 		function onInputChanged(Input: InputObject)
 			if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 				if Dragging[1] or Dragging[2] then
-					local SizeScale = math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+					local SizeScale = math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / math.max(SliderRail.AbsoluteSize.X, 1), 0, 1)
 					local Value
 					if Dragging[1] then
 						local Min = Slider.Min + ((Slider.Max - Slider.Min) * SizeScale)
@@ -193,28 +224,32 @@ function Element:New(Idx, Config)
 			if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 				if Dragging[1] then
 					local SizeScale =
-						math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+						math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / math.max(SliderRail.AbsoluteSize.X, 1), 0, 1)
 					Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * SizeScale))
 				end
 			end
 		end
 	end
 	
-	Creator.AddSignal(UserInputService.InputChanged, onInputChanged)
-
 	Creator.AddSignal(SliderDisplay.FocusLost, function()
 		if Slider.Ranged then
 			local Split = string.split(SliderDisplay.Text, " ")
 			local Min = tonumber(Split[1])
 			local Max = tonumber(Split[2])
-			local Value = NumberRange.new(Min, Max)
-			Slider:SetValue(Value or Slider.Value)
+			if Min and Max then
+				Slider:SetValue(NumberRange.new(math.min(Min, Max), math.max(Min, Max)))
+			else
+				SliderDisplay.Text = tostring(Slider.Value)
+			end
 		else
 			Slider:SetValue(tonumber(SliderDisplay.Text) or Slider.Value)
 		end
-	end)
+	end, SliderSignals)
 
 	function Slider:Destroy()
+		StopDragging()
+		Creator.DisconnectOwner(SliderSignals)
+		Creator.RemoveThemeObject(SliderFrame.Frame, true)
 		SliderFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
