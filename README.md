@@ -3,30 +3,42 @@
 ![Fluent Renewed Title](Assets/darkmode.png#gh-dark-mode-only)
 ![Fluent Renewed Title](Assets/darkmode.png#gh-light-mode-only)
 
-## ⚡ Features
+## Performance-focused Fluent fork
 
-- Modern design
-- Many customization options
-- Almost any UI Element you would ever need
-- Some optimizations/fixes
+This repository maintains a compatibility-oriented Fluent fork with optimizations for drag latency, dropdown handling, theme updates, UI construction, and cleanup.
 
-## 🔌 Installation
+### Installation
 
-You can load Fluent through a GitHub Release:
+The latest **published** optimization release can be loaded with:
 
 ```lua
-local Library = loadstring(game:GetService("HttpService"):GetAsync("https://github.com/Adi0nt/Fluent-Renewed-Plus/releases/latest/download/Fluent.luau", true))()
+local Fluent = loadstring(game:HttpGetAsync(
+    "https://github.com/d6vne/Fluent/releases/latest/download/Fluent.luau"
+))()
 ```
+
+For reproducible deployments, use a pinned release tag rather than `latest`. The draft rewrite branch is **not** the published release.
+
+### API compatibility
+
+`Fluent:CreateWindow`, tabs, sections, and existing element constructors remain supported.
+Animations are disabled by default in the rewrite branch to prioritize responsiveness. To opt in:
 
 ```lua
-local Library = loadstring(game:HttpGetAsync("https://github.com/Adi0nt/Fluent-Renewed-Plus/releases/latest/download/Fluent.luau", true))()
+local Window = Fluent:CreateWindow({
+    Title = "My UI",
+    Size = UDim2.fromOffset(650, 500),
+    Theme = "Dark",
+    Animations = true,
+})
 ```
 
-## 📜 Usage
+The Addons/SaveManager and Addons/InterfaceManager remain available. See [rewrite notes](docs/PERFORMANCE_AND_REWRITE.md) for testing instructions and remaining work.
 
-[Example Script the studio environment](https://github.com/Adi0nt/Fluent-Renewed-Plus/blob/main/Example.client.luau)
+### Examples
 
-[Example Script for an exploit environment](https://github.com/Adi0nt/Fluent-Renewed-Plus/blob/main/Example.lua)
+- [Studio example](Example.client.luau)
+- [Client example](Example.luau)
 
 ## Credits
 
