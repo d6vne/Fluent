@@ -215,17 +215,31 @@ function Creator.UpdateTheme(RegistryIndex: Instance?)
 end
 
 function Creator.AddThemeObject(Object: Instance, Properties: { [string]: any })
-	local Idx = #Creator.Registry + 1
-	local Data = {
+	Creator.Registry[Object] = {
 		Object = Object,
 		Properties = Properties,
-		Idx = Idx,
 	}
 
-	Creator.Registry[Object] = Data
-	Creator.UpdateTheme(Object)
+	-- Apply the current theme to this instance directly. Spawning an UpdateTheme
+	-- worker for every property creates unnecessary work during UI construction.
+	for Property, ThemeKey in next, Properties do
+		local ThemeValue = Creator.GetThemeProperty(ThemeKey)
+		if ThemeValue ~= nil then
+			Object[Property] = ThemeValue
+		end
+	end
 
 	return Object
+end
+
+function Creator.RemoveThemeObject(Object: Instance, IncludeDescendants: boolean?)
+	Creator.Registry[Object] = nil
+
+	if IncludeDescendants then
+		for _, Descendant in ipairs(Object:GetDescendants()) do
+			Creator.Registry[Descendant] = nil
+		end
+	end
 end
 
 function Creator.OverrideTag(Object, Properties)
