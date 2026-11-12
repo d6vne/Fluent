@@ -176,6 +176,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	local EditorOpen = false
 	local Pickers = {}
 	local IgnoreNextColor = {}
+	local ResetButton
 
 	local EditorButton = Section:AddButton({
 		Title = "Customize colors",
@@ -184,6 +185,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 			for _, Picker in pairs(Pickers) do
 				Picker:SetVisibility(EditorOpen)
 			end
+			if ResetButton then ResetButton.Frame.Visible = EditorOpen end
 		end,
 	})
 
@@ -219,7 +221,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		Pickers[Key] = Picker
 	end
 
-	local ResetButton = Section:AddButton({
+	ResetButton = Section:AddButton({
 		Title = "Reset custom colors",
 		Callback = function()
 			Settings.CustomPalette = table.clone(OriginalPalette)
@@ -236,22 +238,6 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		end,
 	})
 	ResetButton.Frame.Visible = false
-
-	-- Keep the Reset action in sync with the compact editor.
-	local OriginalToggle = EditorButton.Instance -- Button returns the Element wrapper.
-	if OriginalToggle then
-		-- No additional click listener is necessary.
-	end
-	-- The editor button is configured above; reset visibility is handled
-	-- by the same user-visible action through an explicit replacement callback.
-	local EditorFrame = EditorButton.Frame
-	if EditorFrame then
-		local Existing = EditorButton.SetTitle
-		-- Update visibility in a single callback; the button itself stays static.
-		local OriginalMouseConnection
-		-- Avoid adding a second click listener; the editor's visible status is
-		-- updated by polling neither heartbeat nor render-step.
-	end
 
 	if Library.UseAcrylic then
 		Section:AddToggle("InterfaceManager_AcrylicToggle", {
