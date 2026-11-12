@@ -16,13 +16,27 @@ local TabModule = {
 }
 
 function TabModule:Init(Window)
-	return setmetatable({
+	local Tabs = setmetatable({
 		Window = Window,
 		Tabs = {},
 		Containers = {},
 		SelectedTab = 0,
 		TabCount = 0,
 	}, { __index = TabModule })
+
+	-- Sidebar labels and icons are the navigation text, not tab content.
+	-- Keep them synchronized with the active palette even if a prior GUI
+	-- property update retained their previous white color.
+	Creator.AddSignal(require(Root).ThemeChanged, function()
+		local Color = Creator.GetThemeProperty("Text")
+		if not Color then return end
+		for _, Tab in next, Tabs.Tabs do
+			if Tab.Label then Tab.Label.TextColor3 = Color end
+			if Tab.Icon then Tab.Icon.ImageColor3 = Color end
+		end
+	end)
+
+	return Tabs
 end
 
 function TabModule:GetCurrentTabPos()
@@ -52,6 +66,45 @@ function TabModule:New(Title, Icon, Parent)
 		ImageRectSize = Vector2.zero
 	}
 
+	local TabLabel = New("TextLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = Icon ~= nil and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0, 12, 0.5, 0),
+		Text = Title,
+		RichText = true,
+		TextColor3 = Creator.GetThemeProperty("Text"),
+		TextTransparency = 0,
+		FontFace = Font.new(
+			"rbxasset://fonts/families/GothamSSm.json",
+			Enum.FontWeight.Regular,
+			Enum.FontStyle.Normal
+		),
+		TextSize = 12,
+		TextXAlignment = "Left",
+		TextYAlignment = "Center",
+		Size = UDim2.new(1, -12, 1, 0),
+		BackgroundTransparency = 1,
+		ThemeTag = {
+			TextColor3 = "Text",
+		},
+	})
+
+	local TabIcon = New("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		BackgroundTransparency = 1,
+		ImageRectOffset = Icon and Icon.ImageRectOffset or Vector2.zero,
+		ImageRectSize = Icon and Icon.ImageRectSize or Vector2.zero,
+		Image = Icon and Icon.Image or nil,
+		ImageColor3 = Creator.GetThemeProperty("Text"),
+		ThemeTag = {
+			ImageColor3 = "Text",
+		},
+	})
+
+	Tab.Label = TabLabel
+	Tab.Icon = TabIcon
+
 	Tab.Frame = New("TextButton", {
 		Size = UDim2.new(1, 0, 0, 34),
 		BackgroundTransparency = 1,
@@ -63,39 +116,8 @@ function TabModule:New(Title, Icon, Parent)
 		New("UICorner", {
 			CornerRadius = UDim.new(0, 6),
 		}),
-		New("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = Icon ~= nil and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0, 12, 0.5, 0),
-			Text = Title,
-			RichText = true,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextTransparency = 0,
-			FontFace = Font.new(
-				"rbxasset://fonts/families/GothamSSm.json",
-				Enum.FontWeight.Regular,
-				Enum.FontStyle.Normal
-			),
-			TextSize = 12,
-			TextXAlignment = "Left",
-			TextYAlignment = "Center",
-			Size = UDim2.new(1, -12, 1, 0),
-			BackgroundTransparency = 1,
-			ThemeTag = {
-				TextColor3 = "Text",
-			},
-		}),
-		New("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(16, 16),
-			Position = UDim2.new(0, 8, 0.5, 0),
-			BackgroundTransparency = 1,
-			ImageRectOffset = Icon and Icon.ImageRectOffset or Vector2.zero,
-			ImageRectSize = Icon and Icon.ImageRectSize or Vector2.zero,
-			Image = Icon and Icon.Image or nil,
-			ThemeTag = {
-				ImageColor3 = "Text",
-			},
-		}),
+		TabLabel,
+		TabIcon,
 	})
 
 	local ContainerLayout = New("UIListLayout", {
