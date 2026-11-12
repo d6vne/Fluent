@@ -40,7 +40,8 @@ return function(Config)
 		),
 	}
 
-	local Dragging, DragInput, MousePos, StartPos = false
+	local Dragging, DragTouch, MousePos, StartPos = false
+	local ResizeTouch, StartResizeSize
 	local Resizing, ResizePos = false
 	local MinimizeNotif = false
 	local IsDraggingHideButton, DragInputHideButton, DragStart, DragStartPos = false
@@ -241,89 +242,73 @@ return function(Config)
 		Window.PostMaximized:Fire(tick())
 	end
 
+	-- Direct manipulation must not wait for a spring simulation to catch up with the pointer.
 	Creator.AddSignal(Window.TitleBar.Frame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Dragging = true
-			MousePos = Input.Position
-			StartPos = Window.Root.Position
-
-			if Window.Maximized then
-				StartPos = UDim2.fromOffset(
-					Mouse.X - (Mouse.X * ((OldSizeX - 100) / Window.Root.AbsoluteSize.X)),
-					Mouse.Y - (Mouse.Y * (OldSizeY / Window.Root.AbsoluteSize.Y))
-				)
-			end
-
-			local Connection
-			Connection = Input.Changed:Connect(function()
-				if Input.UserInputState == Enum.UserInputState.End then
-					Dragging = false
-					if Connection then
-						Connection:Disconnect()
-					end
-				end
-			end)
+		if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+			and Input.UserInputType ~= Enum.UserInputType.Touch then
+			return
 		end
-	end)
+		Dragging = true
+		DragTouch = Input.UserInputType == Enum.UserInputType.Touch and Input or nil
+		MousePos = Input.Position
+		StartPos = Window.Root.Position
 
-	Creator.AddSignal(Window.TitleBar.Frame.InputChanged, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseMovement
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			DragInput = Input
+		if Window.Maximized then
+			local OriginalX = OldSizeX or Window.Size.X.Offset
+			local OriginalY = OldSizeY or Window.Size.Y.Offset
+			local Size = Window.Root.AbsoluteSize
+			StartPos = UDim2.fromOffset(
+				MousePos.X - MousePos.X * ((OriginalX - 100) / math.max(Size.X, 1)),
+				MousePos.Y - MousePos.Y * (OriginalY / math.max(Size.Y, 1))
+			)
+			Window.Maximize(false, true, true)
 		end
 	end)
 
 	Creator.AddSignal(ResizeStartFrame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Resizing = true
-			ResizePos = Input.Position
+		if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+			and Input.UserInputType ~= Enum.UserInputType.Touch then
+			return
 		end
+		Resizing = true
+		ResizeTouch = Input.UserInputType == Enum.UserInputType.Touch and Input or nil
+		ResizePos = Input.Position
+		StartResizeSize = Window.Root.AbsoluteSize
 	end)
 
 	Creator.AddSignal(UserInputService.InputChanged, function(Input)
-		if Input == DragInput and Dragging then
+		local IsMouseMovement = Input.UserInputType == Enum.UserInputType.MouseMovement
+		if Dragging and ((DragTouch and Input == DragTouch) or (not DragTouch and IsMouseMovement)) then
 			local Delta = Input.Position - MousePos
 			Window.Position = UDim2.fromOffset(StartPos.X.Offset + Delta.X, StartPos.Y.Offset + Delta.Y)
+			Window.Root.Position = Window.Position
+			-- Reset pending maximize/restoration animation goals without delaying the cursor.
 			PosMotor:setGoal({
 				X = Instant(Window.Position.X.Offset),
 				Y = Instant(Window.Position.Y.Offset),
 			})
-
-			if Window.Maximized then
-				Window.Maximize(false, true, true)
-			end
 		end
 
-		if
-			(Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
-			and Resizing
-		then
+		if Resizing and ((ResizeTouch and Input == ResizeTouch) or (not ResizeTouch and IsMouseMovement)) then
 			local Delta = Input.Position - ResizePos
-			local StartSize = Window.Size
-
-			local TargetSize = Vector3.new(StartSize.X.Offset, StartSize.Y.Offset, 0) + Vector3.new(1, 1, 0) * Delta
-			local TargetSizeClamped =
-				Vector2.new(math.clamp(TargetSize.X, Window.MinSize.X, 2048), math.clamp(TargetSize.Y, Window.MinSize.Y, 2048))
-
-			SizeMotor:setGoal({
-				X = Flipper.Instant.new(TargetSizeClamped.X),
-				Y = Flipper.Instant.new(TargetSizeClamped.Y),
-			})
+			local Size = Vector2.new(
+				math.clamp(StartResizeSize.X + Delta.X, Window.MinSize.X, 2048),
+				math.clamp(StartResizeSize.Y + Delta.Y, Window.MinSize.Y, 2048)
+			)
+			Window.Size = UDim2.fromOffset(Size.X, Size.Y)
+			Window.Root.Size = Window.Size
+			SizeMotor:setGoal({ X = Instant(Size.X), Y = Instant(Size.Y) })
 		end
 	end)
 
 	Creator.AddSignal(UserInputService.InputEnded, function(Input)
-		if Resizing == true or Input.UserInputType == Enum.UserInputType.Touch then
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or (DragTouch and Input == DragTouch) then
+			Dragging = false
+			DragTouch = nil
+		end
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or (ResizeTouch and Input == ResizeTouch) then
 			Resizing = false
-			Window.Size = UDim2.fromOffset(SizeMotor:getValue().X, SizeMotor:getValue().Y)
+			ResizeTouch = nil
 		end
 	end)
 
