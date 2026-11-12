@@ -141,8 +141,18 @@ function Creator.Delay(Delay, Function, ...)
 	end
 end
 
-function Creator.AddSignal(Signal: RBXScriptSignal, Function)
-	table.insert(Creator.Signals, Signal:Connect(Function))
+function Creator.AddSignal(Signal: RBXScriptSignal, Function, Owner: { RBXScriptConnection }?)
+	local Connection = Signal:Connect(Function)
+	table.insert(Owner or Creator.Signals, Connection)
+	return Connection
+end
+
+function Creator.DisconnectOwner(Connections: { RBXScriptConnection })
+	for Index = #Connections, 1, -1 do
+		local Connection = Connections[Index]
+		Connection:Disconnect()
+		Connections[Index] = nil
+	end
 end
 
 function Creator.Disconnect()
