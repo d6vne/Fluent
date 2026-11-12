@@ -11,7 +11,10 @@ local function Dispatch(Key, ...)
 	for _, Listener in next, Listeners do
 		local Callback = Listener[Key]
 		if Callback then
-			Callback(...)
+			local Success, Err = pcall(Callback, ...)
+			if not Success then
+				task.defer(error, Err)
+			end
 		end
 	end
 end
