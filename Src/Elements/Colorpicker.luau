@@ -536,7 +536,12 @@ function Element:New(Idx, Config)
 		DisplayFrameColor.BackgroundTransparency = Colorpicker.Transparency
 
 		if typeof(Colorpicker.Callback) == "function" then
-			Library:SafeCallback(Colorpicker.Callback, Colorpicker.Value)
+			if Config.ImmediateCallback then
+				local Success, Err = pcall(Colorpicker.Callback, Colorpicker.Value)
+				if not Success then warn("[Fluent] Colorpicker callback:", Err) end
+			else
+				Library:SafeCallback(Colorpicker.Callback, Colorpicker.Value)
+			end
 		end
 		if typeof(Colorpicker.Changed) == "function" then
 			Library:SafeCallback(Colorpicker.Changed, Colorpicker.Value)
