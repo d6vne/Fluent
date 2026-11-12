@@ -61,14 +61,27 @@ function Element:New(Idx, Config)
 		
 		Dragging[i] = false
 		
-		local SliderDot = New("ImageLabel", {
+		-- A real themed shape instead of an asset-tinted image. ImageColor3
+		-- multiplies source pixel colors and can never guarantee the exact
+		-- accent chosen by the active theme.
+		local SliderDot = New("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, -7, 0.5, 0),
 			Size = UDim2.fromOffset(14, 14),
-			Image = "http://www.roblox.com/asset/?id=12266946128",
+			Active = true,
+			ZIndex = 2,
 			ThemeTag = {
-				ImageColor3 = "Accent",
-			}
+				BackgroundColor3 = "Accent",
+			},
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(1, 0),
+			}),
+			New("UIStroke", {
+				Thickness = 1,
+				Transparency = 0.3,
+				ThemeTag = { Color = "AcrylicBorder" },
+			}),
 		})
 		
 		Creator.AddSignal(SliderDot.InputBegan, function(Input)
@@ -141,7 +154,7 @@ function Element:New(Idx, Config)
 		}
 	})
 
-	New("Frame", {
+	local SliderTrack = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 4),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
@@ -161,6 +174,23 @@ function Element:New(Idx, Config)
 		SliderFill,
 		SliderRail
 	})
+
+	-- Reapply the visible slider colors in the same theme-change event.
+	-- The Creator registry handles the initial paint; this keeps the track,
+	-- fill and thumbs consistent even after interactions with their GUI state.
+	Creator.AddSignal(Library.ThemeChanged, function()
+		local Accent = Creator.GetThemeProperty("Accent")
+		local Rail = Creator.GetThemeProperty("SliderRail")
+		local Text = Creator.GetThemeProperty("SubText")
+		if Accent then
+			SliderFill.BackgroundColor3 = Accent
+			for _, Dot in ipairs(SliderDots) do
+				Dot.BackgroundColor3 = Accent
+			end
+		end
+		if Rail then SliderTrack.BackgroundColor3 = Rail end
+		if Text then SliderDisplay.TextColor3 = Text end
+	end, SliderSignals)
 
 	function Slider:OnChanged(Func)
 		Slider.Changed = Func
