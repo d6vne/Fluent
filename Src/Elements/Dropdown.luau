@@ -314,8 +314,11 @@ function Element:New(Idx, Config)
 			if not Entry then return end
 			local Value = Entry.Value
 			local Selected = Dropdown.Multi and Dropdown.Value[Value] or Dropdown.Value == Value
-			if Selected and not Config.AllowNull then
-				if not Dropdown.Multi then return end
+			-- A multi-select should be able to clear its last item by default.
+			-- Single-select preserves the existing AllowNull behavior; for a
+			-- multi-select, only an explicit AllowNull = false requires one item.
+			if Selected and not Dropdown.Multi and not Config.AllowNull then return end
+			if Selected and Dropdown.Multi and Config.AllowNull == false then
 				local Count = 0
 				for _, Enabled in next, Dropdown.Value do
 					if Enabled then Count += 1 end
@@ -324,7 +327,13 @@ function Element:New(Idx, Config)
 				if Count <= 1 then return end
 			end
 			if Dropdown.Multi then
-				Dropdown.Value[Value] = Selected and nil or true
+				-- `Selected and nil or true` is always true in Luau: nil falls
+				-- through the `or` branch and the item can never be deselected.
+				if Selected then
+					Dropdown.Value[Value] = nil
+				else
+					Dropdown.Value[Value] = true
+				end
 				Dropdown:RefreshButtons()
 				Dropdown:Display()
 				if typeof(Dropdown.Callback) == "function" then
