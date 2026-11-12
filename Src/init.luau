@@ -363,74 +363,26 @@ function Library:SetTheme(Name: string)
 end
 
 function Library:Destroy()
-	if Library.CreatedWindow then
-		Library.Unloaded = true
-		Library.Loaded = false
-
-		Library.OnUnload:Fire(tick())
-
-		if Library.UseAcrylic then
-			Library.CreatedWindow.AcrylicPaint.Model:Destroy()
-		end
-
-		Creator.Disconnect()
-
-		for i, v in next, Library.Connections do
-			local type = typeof(v)
-
-			if type == "RBXScriptConnection" and v.Connected then
-				v:Disconnect()
-			end
-		end
-
-		local info, tweenProps, doTween = TweenInfo.new(2 / 3, Enum.EasingStyle.Quint), {}, false
-
-		local function IsA(obj: Object, class: string)
-			local isClass = obj:IsA(class)
-
-			if isClass then
-				doTween = true
-			end
-
-			return isClass
-		end
-
-		for i, v in next, Library.GUI:GetDescendants() do
-			table.clear(tweenProps)
-
-			if IsA(v, "GuiObject") then
-				tweenProps.BackgroundTransparency = 1
-			end
-
-			if IsA(v, "ScrollingFrame") then
-				tweenProps.ScrollBarImageTransparency = 1
-			end
-
-			if IsA(v, "TextLabel") or IsA(v, "TextBox") then
-				tweenProps.TextStrokeTransparency = 1
-				tweenProps.TextTransparency = 1
-			end
-
-			if IsA(v, "UIStroke") then
-				tweenProps.Transparency = 1
-			end
-
-			if IsA(v, "ImageLabel") or IsA(v, "ImageButton") then
-				tweenProps.ImageTransparency = 1
-			end
-
-			if doTween then
-				doTween = false
-				TweenService:Create(v, info, tweenProps):Play()
-			end
-		end
-
-		task.delay(info.Time, function()
-			Library.GUI:Destroy()
-
-			Library.PostUnload:Fire(tick())
-		end)
+	if not Library.CreatedWindow or Library.Unloaded then
+		return
 	end
+
+	Library.Unloaded = true
+	Library.Loaded = false
+	Library.OnUnload:Fire(tick())
+
+	if Library.UseAcrylic and Library.CreatedWindow.AcrylicPaint.Model then
+		Library.CreatedWindow.AcrylicPaint.Model:Destroy()
+	end
+
+	Creator.Disconnect()
+	-- Avoid scheduling one tween per descendant during unload.
+	Library.GUI:Destroy()
+	table.clear(Library.OpenFrames)
+	table.clear(Library.Options)
+	Creator.Registry = setmetatable({}, { __mode = "k" })
+	table.clear(Creator.TransparencyMotors)
+	Library.PostUnload:Fire(tick())
 end
 
 function Library:ToggleAcrylic(Value: boolean)
