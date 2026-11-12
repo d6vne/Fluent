@@ -1,6 +1,7 @@
 name: Pushed
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - '**.luau'
