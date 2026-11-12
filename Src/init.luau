@@ -414,16 +414,10 @@ end
 function Library:ToggleTransparency(Value: boolean)
 	if Library.CreatedWindow then
 		Library.Transparency = Value
-		local Paint = Library.CreatedWindow.AcrylicPaint.Frame
-		-- All three full-window layers must agree on the chosen opacity.
-		-- Previously only the inner Background changed, leaving the outer
-		-- surface permanently translucent and washing out preset colors.
-		Paint.BackgroundTransparency = Value and 0.22 or 0
-		Paint.Background.BackgroundTransparency = Value and 0.35 or 0
-		local Gradient = Paint:FindFirstChild("GradientOverlay")
-		if Gradient then
-			Gradient.BackgroundTransparency = Value and 0.4 or 0
-		end
+		-- Exactly one surface draws the window. Changing opacity must never
+		-- introduce an opaque gradient or a second color over the theme.
+		Library.CreatedWindow.AcrylicPaint.Frame.Background.BackgroundTransparency =
+			Value and 0.08 or 0
 	end
 end
 

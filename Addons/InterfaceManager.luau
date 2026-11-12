@@ -77,11 +77,16 @@ local function ApplyCustomPalette(Library, Palette)
 	Custom.AcrylicGradient = ColorSequence.new(Background, Background:Lerp(Main, 0.2))
 	Custom.TitleBarLine = Outline
 	Custom.Element = Main
+	-- The five-color editor can be derived from a LIGHT preset too. Keeping
+	-- the original dark Custom transparency (0.82) makes pale elements nearly
+	-- invisible over a light window, even when the selected colors are right.
+	local Luminance = Background.R * 0.2126 + Background.G * 0.7152 + Background.B * 0.0722
+	Custom.ElementTransparency = Luminance > 0.62 and 0.18 or 0.82
 	Custom.ElementBorder = Outline
 	Custom.InElementBorder = Outline
-	Custom.ToggleSlider = Main
+	Custom.ToggleSlider = Main:Lerp(Font, 0.25)
 	Custom.ToggleToggled = Background
-	Custom.SliderRail = Main
+	Custom.SliderRail = Main:Lerp(Font, 0.25)
 	Custom.DropdownFrame = Main
 	Custom.DropdownHolder = Background
 	Custom.DropdownBorder = Outline
