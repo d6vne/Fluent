@@ -42,6 +42,8 @@ return {
 	-- Consistent black text across titles, labels, sliders and placeholders.
 	Text = Color3.fromRGB(0, 0, 0),
 	SubText = Color3.fromRGB(0, 0, 0),
+	-- 0 alpha makes the subtitle actual black, not gray composited text.
+	SubtitleTransparency = 0,
 	Hover = Color3.fromHex("E2E8F0"),
 	HoverChange = 0.06
 }
