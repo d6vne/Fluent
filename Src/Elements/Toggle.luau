@@ -36,6 +36,7 @@ function Element:New(Idx, Config)
 		ImageTransparency = 0.5,
 		ThemeTag = {
 			ImageColor3 = "ToggleSlider",
+			ImageTransparency = "ToggleOffTransparency",
 		},
 	}) :: ImageLabel
 
@@ -43,6 +44,7 @@ function Element:New(Idx, Config)
 		Transparency = 0.5,
 		ThemeTag = {
 			Color = "ToggleSlider",
+			Transparency = "ToggleBorderTransparency",
 		},
 	})
 
@@ -77,8 +79,14 @@ function Element:New(Idx, Config)
 
 		rawset(Toggle, "Value", Value)
 
-		Creator.OverrideTag(ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
-		Creator.OverrideTag(ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
+		Creator.OverrideTag(ToggleBorder, {
+			Color = Toggle.Value and "Accent" or "ToggleSlider",
+			Transparency = "ToggleBorderTransparency",
+		})
+		Creator.OverrideTag(ToggleCircle, {
+			ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider",
+			ImageTransparency = Toggle.Value and "ToggleOnTransparency" or "ToggleOffTransparency",
+		})
 		local Position = UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0)
 		if Library.Animations then
 			ToggleCircle:TweenPosition(Position, Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.18, true)
@@ -90,7 +98,6 @@ function Element:New(Idx, Config)
 			ToggleSlider.BackgroundTransparency = Toggle.Value and 0 or 1
 		end
 
-		ToggleCircle.ImageTransparency = Toggle.Value and 0 or 0.5
 
 		if typeof(Toggle.Callback) == "function" then
 			Library:SafeCallback(Toggle.Callback, Toggle.Value)
