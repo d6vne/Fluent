@@ -226,14 +226,24 @@ do
 			return false, "decode error"
 		end
 
+		if typeof(decoded) ~= "table" or typeof(decoded.objects) ~= "table" then
+			return false, "invalid config contents"
+		end
+
 		for _, option in next, decoded.objects do
-			if self.Parser[option.type] then
+			-- IgnoreThemeSettings must also apply when LOADING old config files.
+			-- Before this, legacy saved theme/color options were replayed
+			-- asynchronously and could override the active Appearance theme.
+			if typeof(option) == "table"
+				and typeof(option.idx) == "string"
+				and not self.Ignore[option.idx]
+				and self.Parser[option.type] then
 				task.spawn(self.Library.SafeCallback, self.Library, self.Parser[option.type].Load, option.idx, option)
 			end
 		end
 
-		self.Library:SetTheme(self.Library.Theme)
-
+		-- A gameplay configuration must never trigger a theme refresh.
+		-- InterfaceManager owns that lifecycle independently.
 		return true
 	end
 
