@@ -308,7 +308,7 @@ do
 			if not success then
 				return self.Library:Notify({
 					Title = "Interface",
-					Content = "Config loader",
+					Content = "Config Loader",
 					SubContent = `Failed to load autoload config: {err}`,
 					Duration = 7,
 				})
@@ -316,7 +316,7 @@ do
 
 			return self.Library:Notify({
 				Title = "Interface",
-				Content = "Config loader",
+				Content = "Config Loader",
 				SubContent = string.format("Auto loaded config %q", name),
 				Duration = 7,
 			})
@@ -330,21 +330,21 @@ do
 
 		local section = tab:AddSection("Configuration")
 
-		section:AddInput("SaveManager_ConfigName", { Title = "Config name" })
+		section:AddInput("SaveManager_ConfigName", { Title = "Config Name" })
 		section:AddDropdown(
 			"SaveManager_ConfigList",
-			{ Title = "Config list", Values = self:RefreshConfigList(), AllowNull = true }
+			{ Title = "Config List", Values = self:RefreshConfigList(), AllowNull = true }
 		)
 
 		section:AddButton({
-			Title = "Create config",
+			Title = "Create Config",
 			Callback = function()
 				local name = SaveManager.Options.SaveManager_ConfigName.Value
 
 				if string.gsub(name, " ", "") == "" then
 					return self.Library:Notify({
 						Title = "Interface",
-						Content = "Config loader",
+						Content = "Config Loader",
 						SubContent = "Invalid config name (empty)",
 						Duration = 7,
 					})
@@ -354,7 +354,7 @@ do
 				if not success then
 					return self.Library:Notify({
 						Title = "Interface",
-						Content = "Config loader",
+						Content = "Config Loader",
 						SubContent = "Failed to save config: " .. err,
 						Duration = 7,
 					})
@@ -362,7 +362,7 @@ do
 
 				self.Library:Notify({
 					Title = "Interface",
-					Content = "Config loader",
+					Content = "Config Loader",
 					SubContent = string.format("Created config %q", name),
 					Duration = 7,
 				})
@@ -375,7 +375,7 @@ do
 		})
 
 		section:AddButton({
-			Title = "Load config",
+			Title = "Load Config",
 			Callback = function()
 				local name = SaveManager.Options.SaveManager_ConfigList.Value
 
@@ -383,7 +383,7 @@ do
 				if not success then
 					return self.Library:Notify({
 						Title = "Interface",
-						Content = "Config loader",
+						Content = "Config Loader",
 						SubContent = "Failed to load config: " .. err,
 						Duration = 7,
 					})
@@ -391,7 +391,7 @@ do
 
 				return self.Library:Notify({
 					Title = "Interface",
-					Content = "Config loader",
+					Content = "Config Loader",
 					SubContent = string.format("Loaded config %q", name),
 					Duration = 7,
 				})
@@ -399,7 +399,7 @@ do
 		})
 
 		section:AddButton({
-			Title = "Overwrite config",
+			Title = "Overwrite Config",
 			Callback = function()
 				local name = SaveManager.Options.SaveManager_ConfigList.Value
 
@@ -407,7 +407,7 @@ do
 				if not success then
 					return self.Library:Notify({
 						Title = "Interface",
-						Content = "Config loader",
+						Content = "Config Loader",
 						SubContent = "Failed to overwrite config: " .. err,
 						Duration = 7,
 					})
@@ -415,7 +415,7 @@ do
 
 				return self.Library:Notify({
 					Title = "Interface",
-					Content = "Config loader",
+					Content = "Config Loader",
 					SubContent = string.format("Overwrote config %q", name),
 					Duration = 7,
 				})
@@ -423,7 +423,7 @@ do
 		})
 
 		section:AddButton({
-			Title = "Refresh list",
+			Title = "Refresh List",
 			Callback = function()
 				SaveManager.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
 				SaveManager.Options.SaveManager_ConfigList:SetValue(nil)
@@ -432,15 +432,15 @@ do
 
 		local AutoloadButton
 		AutoloadButton = section:AddButton({
-			Title = "Set as autoload",
-			Description = "Current autoload config: none",
+			Title = "Set As Autoload",
+			Description = "Current Autoload Config: None",
 			Callback = function()
 				local name = SaveManager.Options.SaveManager_ConfigList.Value
 				writefile(`{self.Folder}/settings/autoload.txt`, name)
-				AutoloadButton:SetDesc("Current autoload config: " .. name)
+				AutoloadButton:SetDesc("Current Autoload Config: " .. name)
 				self.Library:Notify({
 					Title = "Interface",
-					Content = "Config loader",
+					Content = "Config Loader",
 					SubContent = string.format("Set %q to auto load", name),
 					Duration = 7,
 				})
@@ -449,7 +449,7 @@ do
 
 		if isfile(`{self.Folder}/settings/autoload.txt`) then
 			local name = readfile(`{self.Folder}/settings/autoload.txt`)
-			AutoloadButton:SetDesc("Current autoload config: " .. name)
+			AutoloadButton:SetDesc("Current Autoload Config: " .. name)
 		end
 
 		SaveManager:SetIgnoreIndexes({ "SaveManager_ConfigList", "SaveManager_ConfigName" })
