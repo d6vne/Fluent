@@ -16,24 +16,29 @@ local TabModule = {
 }
 
 function TabModule:Init(Window)
-	TabModule.Window = Window
-	return TabModule
+	return setmetatable({
+		Window = Window,
+		Tabs = {},
+		Containers = {},
+		SelectedTab = 0,
+		TabCount = 0,
+	}, { __index = TabModule })
 end
 
 function TabModule:GetCurrentTabPos()
-	local TabHolderPos = TabModule.Window.TabHolder.AbsolutePosition.Y
-	local TabPos = TabModule.Tabs[TabModule.SelectedTab].Frame.AbsolutePosition.Y
+	local TabHolderPos = self.Window.TabHolder.AbsolutePosition.Y
+	local TabPos = self.Tabs[self.SelectedTab].Frame.AbsolutePosition.Y
 
 	return TabPos - TabHolderPos
 end
 
 function TabModule:New(Title, Icon, Parent)
 	local Library = require(Root)
-	local Window = TabModule.Window
+	local Window = self.Window
 	local Elements = Library.Elements
 
-	TabModule.TabCount = TabModule.TabCount + 1
-	local TabIndex = TabModule.TabCount
+	self.TabCount = self.TabCount + 1
+	local TabIndex = self.TabCount
 
 	local Tab = {
 		Selected = false,
@@ -143,11 +148,11 @@ function TabModule:New(Title, Icon, Parent)
 		Tab.SetTransparency(Tab.Selected and 0.85 or 0.89)
 	end)
 	Creator.AddSignal(Tab.Frame.MouseButton1Click, function()
-		TabModule:SelectTab(TabIndex)
+		self:SelectTab(TabIndex)
 	end)
 
-	TabModule.Containers[TabIndex] = Tab.ContainerFrame
-	TabModule.Tabs[TabIndex] = Tab
+	self.Containers[TabIndex] = Tab.ContainerFrame
+	self.Tabs[TabIndex] = Tab
 
 	Tab.Container = Tab.ContainerFrame
 	Tab.ScrollFrame = Tab.Container
@@ -173,27 +178,27 @@ function TabModule:New(Title, Icon, Parent)
 end
 
 function TabModule:SelectTab(Tab)
-	local Window = TabModule.Window
-	local SelectedTab = TabModule.Tabs[Tab]
+	local Window = self.Window
+	local SelectedTab = self.Tabs[Tab]
 	if not SelectedTab then
 		return
 	end
 
-	if TabModule.SelectedTab == Tab then
+	if self.SelectedTab == Tab then
 		return
 	end
 
-	TabModule.SelectedTab = Tab
-	for Index, TabObject in next, TabModule.Tabs do
+	self.SelectedTab = Tab
+	for Index, TabObject in next, self.Tabs do
 		local IsSelected = Index == Tab
 		TabObject.Selected = IsSelected
 		TabObject.SetTransparency(IsSelected and 0.89 or 1)
 	end
 
 	Window.TabDisplay.Text = SelectedTab.Name
-	Window.SelectorPosMotor:setGoal(Instant(TabModule:GetCurrentTabPos()))
+	Window.SelectorPosMotor:setGoal(Instant(self:GetCurrentTabPos()))
 	-- Immediate page visibility: no delayed workers competing after rapid clicks.
-	for Index, Container in next, TabModule.Containers do
+	for Index, Container in next, self.Containers do
 		Container.Visible = Index == Tab
 	end
 	Window.ContainerPosMotor:setGoal(Instant(0))
