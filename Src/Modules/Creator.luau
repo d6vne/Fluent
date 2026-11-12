@@ -16,7 +16,7 @@ local Creator = {
 	ActiveTheme = "Dark",
 	Signals = {},
 	Threads = {},
-	TransparencyMotors = {},
+	TransparencyMotors = setmetatable({}, { __mode = "k" }),
 	DefaultProperties = {
 		ScreenGui = {
 			ResetOnSpawn = false,
