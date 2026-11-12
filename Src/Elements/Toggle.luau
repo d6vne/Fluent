@@ -11,6 +11,8 @@ Element.__type = "Toggle"
 
 function Element:New(Idx, Config)
 	local Library = self.Library
+	local ToggleSignals = {}
+	local Destroyed = false
 	assert(Config.Title, "Toggle - Missing Title")
 
 	local Toggle = {
@@ -74,22 +76,18 @@ function Element:New(Idx, Config)
 
 		rawset(Toggle, "Value", Value)
 
-		Creator.Spawn(Creator.OverrideTag, ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
-		Creator.Spawn(Creator.OverrideTag, ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
-
-		ToggleCircle:TweenPosition(
-			UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0),
-			Enum.EasingDirection.Out,
-			Enum.EasingStyle.Quint,
-			.25,
-			true
-		)
-
-		TweenService:Create(
-			ToggleSlider,
-			TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = Toggle.Value and 0 or 1 }
-		):Play()
+		Creator.OverrideTag(ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
+		Creator.OverrideTag(ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
+		local Position = UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0)
+		if Library.Animations then
+			ToggleCircle:TweenPosition(Position, Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.18, true)
+			TweenService:Create(ToggleSlider, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+				BackgroundTransparency = Toggle.Value and 0 or 1,
+			}):Play()
+		else
+			ToggleCircle.Position = Position
+			ToggleSlider.BackgroundTransparency = Toggle.Value and 0 or 1
+		end
 
 		ToggleCircle.ImageTransparency = Toggle.Value and 0 or 0.5
 
@@ -102,13 +100,24 @@ function Element:New(Idx, Config)
 	end
 
 	function Toggle:Destroy()
+		if Destroyed then
+			return
+		end
+		Destroyed = true
+		Creator.DisconnectOwner(ToggleSignals)
+		if type(Toggle.Keybind) == "table" and type(Toggle.Keybind.Destroy) == "function" then
+			Toggle.Keybind:Destroy()
+		end
+		Creator.RemoveThemeObject(ToggleFrame.Frame, true)
 		ToggleFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
 	Creator.AddSignal(ToggleFrame.Frame.MouseButton1Click, function()
-		Toggle:SetValue(not Toggle.Value)
-	end)
+		if not Destroyed then
+			Toggle:SetValue(not Toggle.Value)
+		end
+	end, ToggleSignals)
 
 	Toggle.Keybind = setmetatable({}, { -- TODO: Rewrite this piece of shit
 		__call = function(_, self, Idx, Config)
