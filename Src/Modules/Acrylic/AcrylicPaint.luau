@@ -11,6 +11,26 @@ local New = Creator.New
 return function()
 	local AcrylicPaint = {}
 
+	-- Expose the real painted surface and its stroke so SetTheme can
+	-- deterministically update the full-window background in the same call.
+	local Border = New("UIStroke", {
+		Thickness = 1,
+		Transparency = 0.45,
+		ThemeTag = { Color = "AcrylicBorder" },
+	})
+	local Background = New("Frame", {
+		Name = "Background",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		ThemeTag = { BackgroundColor3 = "AcrylicMain" },
+	}, {
+		New("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		Border,
+	})
+	AcrylicPaint.Background = Background
+	AcrylicPaint.Border = Border
+
 	AcrylicPaint.Frame = New("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -27,22 +47,7 @@ return function()
 			ImageColor3 = Color3.new(0, 0, 0),
 			ImageTransparency = 0.7,
 		}),
-		New("Frame", {
-			Name = "Background",
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 0.08,
-			BorderSizePixel = 0,
-			ThemeTag = {
-				BackgroundColor3 = "AcrylicMain",
-			},
-		}, {
-			New("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			New("UIStroke", {
-				Thickness = 1,
-				Transparency = 0.45,
-				ThemeTag = { Color = "AcrylicBorder" },
-			}),
-		}),
+		Background,
 	})
 
 	-- The optional blur still works, but never adds a second tinted surface.
