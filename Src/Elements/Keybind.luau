@@ -2,6 +2,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Root = script.Parent.Parent
 local Creator = require(Root.Modules.Creator)
+local InputRouter = require(Root.Modules.InputRouter)
 
 local New = Creator.New
 local Components = Root.Components
@@ -23,6 +24,10 @@ function Element:New(Idx, Config)
 	}
 
 	local Picking = false
+	local PendingKey
+	local CaptureReadyAt = 0
+	local Destroyed = false
+	local KeybindSignals = {}
 
 	local KeybindFrame = require(Components.Element)(Config.Title or "Keybind", Config.Description, self.Container, true)
 
@@ -93,7 +98,9 @@ function Element:New(Idx, Config)
 					or Key == "RightMousebutton"
 						and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
 			else
-				return UserInputService:IsKeyDown(Enum.KeyCode[Keybind.Value])
+				local KeyName = typeof(Keybind.Value) == "EnumItem" and Keybind.Value.Name or Keybind.Value
+				local KeyCode = typeof(KeyName) == "string" and Enum.KeyCode[KeyName] or nil
+				return KeyCode ~= nil and UserInputService:IsKeyDown(KeyCode)
 			end
 		else
 			return Keybind.Toggled
@@ -140,71 +147,63 @@ function Element:New(Idx, Config)
 	end
 
 	function Keybind:Destroy()
+		if Destroyed then return end
+		Destroyed = true
+		Picking = false
+		InputRouter.Unregister(Keybind)
+		Creator.DisconnectOwner(KeybindSignals)
+		Creator.RemoveThemeObject(KeybindFrame.Frame, true)
 		KeybindFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
 	Creator.AddSignal(KeybindDisplayFrame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Picking = true
-			KeybindDisplayLabel.Text = "..."
-
-			wait(0.2)
-
-			UserInputService.InputBegan:Once(function(Input)
-				local Key
-
-				if Input.UserInputType == Enum.UserInputType.Keyboard then
-					Key = Input.KeyCode.Name
-				elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
-					Key = "LeftMousebutton"
-				elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
-					Key = "RightMousebutton"
-				end
-
-				UserInputService.InputEnded:Once(function(Input)
-					if (Input.KeyCode.Name == Key
-						or Key == "LeftMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton1
-						or Key == "RightMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton2)
-						and not Library.Unloaded
-					then
-						Picking = false
-
-						Keybind.Value = Key
-
-						KeybindDisplayLabel.Text = Library.Utilities:Prettify(Keybind.Value)
-
-						Library:SafeCallback(Keybind.ChangedCallback, Input.KeyCode or Input.UserInputType)
-						Library:SafeCallback(Keybind.Changed, Input.KeyCode or Input.UserInputType)
-					end
-				end)
-			end)
+		if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+			and Input.UserInputType ~= Enum.UserInputType.Touch then
+			return
 		end
-	end)
+		Picking = true
+		PendingKey = nil
+		CaptureReadyAt = os.clock() + 0.15
+		KeybindDisplayLabel.Text = "..."
+	end, KeybindSignals)
 
-	Creator.AddSignal(UserInputService.InputBegan, function(Input)
-		if not Picking and not UserInputService:GetFocusedTextBox() then
-			if Keybind.Mode == "Toggle" then
-				local Key = Keybind.Value
+	local function MatchesInput(Input, Key)
+		if Key == "LeftMousebutton" then
+			return Input.UserInputType == Enum.UserInputType.MouseButton1
+		elseif Key == "RightMousebutton" then
+			return Input.UserInputType == Enum.UserInputType.MouseButton2
+		end
+		return Input.UserInputType == Enum.UserInputType.Keyboard and
+			(Input.KeyCode.Name == Key or Input.KeyCode == Key)
+	end
 
-				if Key == "LeftMousebutton" or Key == "RightMousebutton" then
-					if
-						Key == "LeftMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton1
-						or Key == "RightMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton2
-					then
-						Keybind.Toggled = not Keybind.Toggled
-						Keybind:DoClick()
-					end
-				elseif Input.UserInputType == Enum.UserInputType.Keyboard then
-					if Input.KeyCode.Name == Key or Input.KeyCode == Key then
-						Keybind.Toggled = not Keybind.Toggled
-						Keybind:DoClick()
-					end
-				end
+	InputRouter.Register(Keybind, function(Input)
+		if Destroyed or Library.Unloaded then return end
+		if Picking then
+			if os.clock() < CaptureReadyAt then return end
+			if Input.UserInputType == Enum.UserInputType.Keyboard then
+				PendingKey = Input.KeyCode.Name
+			elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
+				PendingKey = "LeftMousebutton"
+			elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
+				PendingKey = "RightMousebutton"
 			end
+			return
+		end
+
+		if Keybind.Mode == "Toggle" and not UserInputService:GetFocusedTextBox()
+			and MatchesInput(Input, Keybind.Value) then
+			Keybind.Toggled = not Keybind.Toggled
+			Keybind:DoClick()
+		end
+	end, function(Input)
+		if Destroyed or not Picking or not PendingKey then return end
+		if MatchesInput(Input, PendingKey) then
+			local Key = PendingKey
+			PendingKey = nil
+			Picking = false
+			Keybind:SetValue(Key)
 		end
 	end)
 
