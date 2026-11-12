@@ -1,5 +1,4 @@
 local UserInputService = game:GetService("UserInputService")
-local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
 local Camera = game:GetService("Workspace").CurrentCamera
 
 local Root = script.Parent.Parent
@@ -146,61 +145,69 @@ function Element:New(Idx, Config)
 		}),
 	}) :: Frame
 
-	local SearchableTextbox = require(Components.Textbox)(DropdownHolderFrame, true)
-	SearchableTextbox.Frame.Visible = Dropdown.Searchable
-	SearchableTextbox.Frame.AnchorPoint = Vector2.new(0.5, 0)
-	SearchableTextbox.Frame.Position = UDim2.new(0.5, 0, 0, 5)
-	SearchableTextbox.Frame.Size = UDim2.new(1, -5, 0, 32)
-	SearchableTextbox.Input.PlaceholderText = Dropdown.SearchPlaceholder
-	SearchableTextbox.Input.Text = ""
+	-- Avoid constructing a search TextBox for non-searchable dropdowns.
+	local SearchBox
+	if Dropdown.Searchable then
+		local SearchableTextbox = require(Components.Textbox)(DropdownHolderFrame, true)
+		SearchableTextbox.Frame.AnchorPoint = Vector2.new(0.5, 0)
+		SearchableTextbox.Frame.Position = UDim2.new(0.5, 0, 0, 5)
+		SearchableTextbox.Frame.Size = UDim2.new(1, -5, 0, 32)
+		SearchableTextbox.Input.PlaceholderText = Dropdown.SearchPlaceholder
+		SearchableTextbox.Input.Text = ""
+		SearchBox = SearchableTextbox.Input
+	end
 
-	local SearchBox = SearchableTextbox.Input
-
-	local ButtonSelector_BuildList = New("Frame", {
-		Size = UDim2.fromOffset(4, 14),
-		BackgroundColor3 = Color3.fromRGB(76, 194, 255),
-		Position = UDim2.fromOffset(-1, 16),
-		AnchorPoint = Vector2.new(0, 0.5),
-		ThemeTag = {
-			BackgroundColor3 = "Accent",
-		},
-	}, {
-		New("UICorner", {
-			CornerRadius = UDim.new(0, 2),
-		}),
-	}) :: Frame
-
-	local ButtonLabel_BuildList = New("TextLabel", {
-		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-		TextColor3 = Color3.fromRGB(200, 200, 200),
-		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		Position = UDim2.fromOffset(10, 0),
-		Name = "ButtonLabel",
-		ThemeTag = {
-			TextColor3 = "Text",
-		},
-	}) :: TextLabel
-
-	local Button_BuildList = New("TextButton", {
-		Size = UDim2.new(1, -5, 0, 32),
-		BackgroundTransparency = 1,
-		ZIndex = 23,
-		Text = "",
-		ThemeTag = {
-			BackgroundColor3 = "DropdownOption",
-		},
-	}, {
-		ButtonSelector_BuildList,
-		ButtonLabel_BuildList,
-		New("UICorner", {
-			CornerRadius = UDim.new(0, 6),
-		}),
-	}) :: TextButton
+	-- The template is also created only on the first open, not at startup.
+	local Button_BuildList
+	local function EnsureButtonTemplate()
+		if Button_BuildList then return end
+		local ButtonSelector_BuildList = New("Frame", {
+			Size = UDim2.fromOffset(4, 14),
+			BackgroundColor3 = Color3.fromRGB(76, 194, 255),
+			Position = UDim2.fromOffset(-1, 16),
+			AnchorPoint = Vector2.new(0, 0.5),
+			ThemeTag = {
+				BackgroundColor3 = "Accent",
+			},
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 2),
+			}),
+		}) :: Frame
+	
+			local ButtonLabel_BuildList = New("TextLabel", {
+			FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
+			TextColor3 = Color3.fromRGB(200, 200, 200),
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Position = UDim2.fromOffset(10, 0),
+			Name = "ButtonLabel",
+			ThemeTag = {
+				TextColor3 = "Text",
+			},
+		}) :: TextLabel
+	
+			Button_BuildList = New("TextButton", {
+			Size = UDim2.new(1, -5, 0, 32),
+			BackgroundTransparency = 1,
+			ZIndex = 23,
+			Text = "",
+			ThemeTag = {
+				BackgroundColor3 = "DropdownOption",
+			},
+		}, {
+			ButtonSelector_BuildList,
+			ButtonLabel_BuildList,
+			New("UICorner", {
+				CornerRadius = UDim.new(0, 6),
+			}),
+		}) :: TextButton
+	
+	end
 
 	local DropdownHolderCanvas = New("Frame", {
 		BackgroundTransparency = 1,
@@ -271,6 +278,7 @@ function Element:New(Idx, Config)
 	end
 
 	local function CreatePoolRow()
+		EnsureButtonTemplate()
 		local Button = Button_BuildList:Clone()
 		local Selector = Button:FindFirstChild("Frame")
 		local Label = Button:FindFirstChild("ButtonLabel")
@@ -545,10 +553,10 @@ function Element:New(Idx, Config)
 			end
 		end
 		Creator.RemoveThemeObject(DropdownHolderCanvas, true)
-		Creator.RemoveThemeObject(Button_BuildList, true)
+		if Button_BuildList then Creator.RemoveThemeObject(Button_BuildList, true) end
 		Creator.RemoveThemeObject(DropdownFrame.Frame, true)
 		DropdownHolderCanvas:Destroy()
-		Button_BuildList:Destroy()
+		if Button_BuildList then Button_BuildList:Destroy() end
 		DropdownFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
@@ -556,9 +564,11 @@ function Element:New(Idx, Config)
 	Dropdown.TabScrollFrame = self.ScrollFrame
 	Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition, DropdownSignals)
 	Creator.AddSignal(DropdownHolderCanvas:GetPropertyChangedSignal("AbsoluteSize"), RecalculateListPosition, DropdownSignals)
-	Creator.AddSignal(SearchBox:GetPropertyChangedSignal("Text"), function()
-		if Dropdown.Opened then Refilter() end
-	end, DropdownSignals)
+	if SearchBox then
+		Creator.AddSignal(SearchBox:GetPropertyChangedSignal("Text"), function()
+			if Dropdown.Opened then Refilter() end
+		end, DropdownSignals)
+	end
 	Creator.AddSignal(DropdownScrollFrame:GetPropertyChangedSignal("CanvasPosition"), function()
 		RefreshPool(false)
 	end, DropdownSignals)
