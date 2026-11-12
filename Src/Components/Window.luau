@@ -179,11 +179,15 @@ return function(Config)
 	Window.ContainerPosMotor = Flipper.SingleMotor.new(94)
 
 	SizeMotor:onStep(function(values)
-		Window.Root.Size = UDim2.new(0, values.X, 0, values.Y)
+		if not Resizing then
+			Window.Root.Size = UDim2.fromOffset(values.X, values.Y)
+		end
 	end)
 
 	PosMotor:onStep(function(values)
-		Window.Root.Position = UDim2.new(0, values.X, 0, values.Y)
+		if not Dragging then
+			Window.Root.Position = UDim2.fromOffset(values.X, values.Y)
+		end
 	end)
 
 	local LastValue = 0
@@ -282,11 +286,6 @@ return function(Config)
 			local Delta = Input.Position - MousePos
 			Window.Position = UDim2.fromOffset(StartPos.X.Offset + Delta.X, StartPos.Y.Offset + Delta.Y)
 			Window.Root.Position = Window.Position
-			-- Reset pending maximize/restoration animation goals without delaying the cursor.
-			PosMotor:setGoal({
-				X = Instant(Window.Position.X.Offset),
-				Y = Instant(Window.Position.Y.Offset),
-			})
 		end
 
 		if Resizing and ((ResizeTouch and Input == ResizeTouch) or (not ResizeTouch and IsMouseMovement)) then
@@ -297,18 +296,26 @@ return function(Config)
 			)
 			Window.Size = UDim2.fromOffset(Size.X, Size.Y)
 			Window.Root.Size = Window.Size
-			SizeMotor:setGoal({ X = Instant(Size.X), Y = Instant(Size.Y) })
 		end
 	end)
 
 	Creator.AddSignal(UserInputService.InputEnded, function(Input)
-		if Input.UserInputType == Enum.UserInputType.MouseButton1 or (DragTouch and Input == DragTouch) then
+		if Dragging and (Input.UserInputType == Enum.UserInputType.MouseButton1 and not DragTouch or DragTouch and Input == DragTouch) then
 			Dragging = false
 			DragTouch = nil
+			-- One final motor synchronization per gesture, not one per mouse movement.
+			PosMotor:setGoal({
+				X = Instant(Window.Position.X.Offset),
+				Y = Instant(Window.Position.Y.Offset),
+			})
 		end
-		if Input.UserInputType == Enum.UserInputType.MouseButton1 or (ResizeTouch and Input == ResizeTouch) then
+		if Resizing and (Input.UserInputType == Enum.UserInputType.MouseButton1 and not ResizeTouch or ResizeTouch and Input == ResizeTouch) then
 			Resizing = false
 			ResizeTouch = nil
+			SizeMotor:setGoal({
+				X = Instant(Window.Size.X.Offset),
+				Y = Instant(Window.Size.Y.Offset),
+			})
 		end
 	end)
 
