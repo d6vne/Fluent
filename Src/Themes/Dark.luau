@@ -16,6 +16,10 @@ return {
 
 	ToggleSlider = Color3.fromRGB(120, 120, 120),
 	ToggleToggled = Color3.fromRGB(0, 0, 0),
+	-- Used as fallbacks by all dark presets; preserve their original opacity.
+	ToggleOffTransparency = 0.5,
+	ToggleOnTransparency = 0,
+	ToggleBorderTransparency = 0.5,
 
 	SliderRail = Color3.fromRGB(120, 120, 120),
 
