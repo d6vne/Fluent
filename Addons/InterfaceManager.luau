@@ -24,8 +24,8 @@ local function GetDefaultPalette(Library)
 		FontColor = Custom.Text:ToHex(),
 		MainColor = Custom.Element:ToHex(),
 		AccentColor = Custom.Accent:ToHex(),
-		BackgroundColor = Custom.Dialog:ToHex(),
-		OutlineColor = Custom.ElementBorder:ToHex(),
+		BackgroundColor = Custom.AcrylicMain:ToHex(),
+		OutlineColor = Custom.AcrylicBorder:ToHex(),
 	}
 end
 
@@ -111,6 +111,8 @@ function InterfaceManager:SetLibrary(Library)
 	OriginalPalette = GetDefaultPalette(Library)
 	self.Settings = {
 		Theme = Library.Theme or "Dark",
+		-- Last explicitly selected preset survives legacy accidental Custom saves.
+		LastPreset = table.find(Library.Themes, Library.Theme) and Library.Theme or "Dark",
 		Acrylic = Library.UseAcrylic == true,
 		Transparency = Library.Transparency ~= false,
 		MenuKeybind = typeof(Library.MinimizeKey) == "EnumItem"
@@ -149,7 +151,22 @@ function InterfaceManager:LoadSettings()
 	if not Success or typeof(Data) ~= "table" then return end
 
 	local Settings = self.Settings
-	if typeof(Data.Theme) == "string" then Settings.Theme = Data.Theme end
+	local HasValidLastPreset = typeof(Data.LastPreset) == "string"
+		and table.find(self.Library.Themes, Data.LastPreset) ~= nil
+	if HasValidLastPreset then
+		Settings.LastPreset = Data.LastPreset
+	end
+	if typeof(Data.Theme) == "string" then
+		Settings.Theme = Data.Theme
+	end
+	-- Before LastPreset existed, startup colorpicker initialization could
+	-- inadvertently overwrite a previously selected preset with "Custom".
+	-- Migrate that ambiguous legacy value to the Window's configured theme,
+	-- but retain its saved palette for later explicit Custom selection.
+	local MigratedLegacyCustom = Settings.Theme == "Custom" and not HasValidLastPreset
+	if MigratedLegacyCustom then
+		Settings.Theme = Settings.LastPreset
+	end
 	if typeof(Data.Acrylic) == "boolean" then Settings.Acrylic = Data.Acrylic end
 	if typeof(Data.Transparency) == "boolean" then Settings.Transparency = Data.Transparency end
 	if typeof(Data.MenuKeybind) == "string" then Settings.MenuKeybind = Data.MenuKeybind end
@@ -160,6 +177,7 @@ function InterfaceManager:LoadSettings()
 			end
 		end
 	end
+	return MigratedLegacyCustom
 end
 
 function InterfaceManager:BuildInterfaceSection(Tab)
@@ -167,14 +185,18 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 
 	local Library = self.Library
 	local Settings = self.Settings
-	self:LoadSettings()
+	local MigratedLegacyCustom = self:LoadSettings()
 
 	-- Legacy presets that were removed migrate cleanly to Dark.
 	if Settings.Theme ~= "Custom" and not table.find(Library.Themes, Settings.Theme) then
-		Settings.Theme = "Dark"
+		Settings.Theme = table.find(Library.Themes, Settings.LastPreset) and Settings.LastPreset or "Dark"
 	end
 	ApplyCustomPalette(Library, Settings.CustomPalette)
 	Library:SetTheme(Settings.Theme)
+	-- Saved settings must take effect immediately, not only after the
+	-- next toggle click or a later configuration reload.
+	Library:ToggleTransparency(Settings.Transparency)
+	if Library.UseAcrylic then Library:ToggleAcrylic(Settings.Acrylic) end
 
 	local Presets = table.clone(Library.Themes)
 	if Settings.Theme == "Custom" then Presets[#Presets + 1] = "Custom" end
@@ -209,6 +231,9 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 			if typeof(Value) ~= "string" then return end
 			if Value ~= "Custom" and not table.find(Library.Themes, Value) then return end
 			Settings.Theme = Value
+			if Value ~= "Custom" then
+				Settings.LastPreset = Value
+			end
 			if Value == "Custom" then
 				ApplyCustomPalette(Library, Settings.CustomPalette)
 			end
@@ -245,13 +270,16 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 
 	for _, Item in ipairs(PaletteOptions) do
 		local Key = Item.Key
+		-- Colorpicker:New calls Display() before returning. Its initial callback
+		-- must never be mistaken for a real edit or persist "Custom".
+		local PickerReady = false
 		local Picker = Section:AddColorpicker("InterfaceManager_" .. Key, {
 			Title = Item.Title,
 			Default = ReadPaletteColor(InitialPalette, Key, OriginalPalette[Key]),
 			UpdateOnChange = false,
 			ImmediateCallback = true,
 			Callback = function(Value)
-				if SyncingPickers or typeof(Value) ~= "Color3" then return end
+				if not PickerReady or SyncingPickers or typeof(Value) ~= "Color3" then return end
 				local Hex = Value:ToHex()
 				local ActivePalette = GetVisiblePalette(Library, Settings.Theme, Settings.CustomPalette)
 				-- Initial, programmatic, and canceled edits must never change the
@@ -270,6 +298,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		})
 		Picker:SetVisibility(false)
 		Pickers[Key] = Picker
+		PickerReady = true
 	end
 
 	ResetButton = Section:AddButton({
@@ -315,6 +344,11 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 		end,
 	})
 	Library.MinimizeKeybind = MenuKeybind
+
+	if MigratedLegacyCustom then
+		-- One-time migration: stop reloading an accidentally saved Custom mode.
+		self:SaveSettings()
+	end
 end
 
 return InterfaceManager
