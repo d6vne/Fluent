@@ -5,7 +5,6 @@ local Creator = require(Root.Modules.Creator)
 local Acrylic = require(Root.Modules.Acrylic)
 
 local Spring = Flipper.Spring.new
-local Instant = Flipper.Instant.new
 local New = Creator.New
 
 local SoundService = game:GetService("SoundService")
@@ -33,6 +32,8 @@ function Notification:New(Config)
 	local NewNotification = {
 		Closed = false,
 	}
+	local NotificationSignals = {}
+	local Animations = require(Root).Animations
 
 	Config.Title = Config.Title or "Title"
 	Config.Content = Config.Content or "Content"
@@ -157,54 +158,61 @@ function Notification:New(Config)
 		NewNotification.Root,
 	})
 
-	local RootMotor = Flipper.GroupMotor.new({
-		Scale = 1,
-		Offset = 60,
-	})
-
-	RootMotor:onStep(function(Values)
-		NewNotification.Root.Position = UDim2.new(Values.Scale, Values.Offset, 0, 0)
-	end)
+	local RootMotor
+	if Animations then
+		RootMotor = Flipper.GroupMotor.new({ Scale = 1, Offset = 60 })
+		RootMotor:onStep(function(Values)
+			NewNotification.Root.Position = UDim2.new(Values.Scale, Values.Offset, 0, 0)
+		end)
+	else
+		NewNotification.Root.Position = UDim2.fromScale(0, 0)
+	end
 
 	Creator.AddSignal(NewNotification.CloseButton.MouseButton1Click, function()
 		NewNotification:Close()
-	end)
+	end, NotificationSignals)
 
 	function NewNotification:Open()
-		local ContentSize = NewNotification.LabelHolder.AbsoluteSize.Y
-		NewNotification.Holder.Size = UDim2.new(1, 0, 0, 58 + ContentSize)
+		NewNotification.Holder.Size = UDim2.new(1, 0, 0, 58 + NewNotification.LabelHolder.AbsoluteSize.Y)
 
 		if Config.Sound.SoundId then
-			NewNotification.Sound = New("Sound", Config.Sound)
-
-			if not NewNotification.Sound.IsLoaded then
-				NewNotification.Sound.Loaded:Wait()
-			end
-
-			NewNotification.Sound:Destroy()
-			NewNotification.Sound = nil
+			local Sound = New("Sound", Config.Sound)
+			Sound.PlayOnRemove = false
+			NewNotification.Sound = Sound
+			Sound:Play() -- Start asynchronously; never block the UI on Sound.Loaded.
+			task.delay(5, function()
+				if Sound.Parent then Sound:Destroy() end
+			end)
 		end
 
-		RootMotor:setGoal({
-			Scale = Spring(0, { frequency = 5 }),
-			Offset = Spring(0, { frequency = 5 }),
-		})
+		if RootMotor then
+			RootMotor:setGoal({
+				Scale = Spring(0, { frequency = 5 }),
+				Offset = Spring(0, { frequency = 5 }),
+			})
+		end
+	end
+
+	local function Cleanup()
+		Creator.DisconnectOwner(NotificationSignals)
+		if require(Root).UseAcrylic and NewNotification.AcrylicPaint.Model then
+			NewNotification.AcrylicPaint.Model:Destroy()
+		end
+		Creator.RemoveThemeObject(NewNotification.Holder, true)
+		NewNotification.Holder:Destroy()
 	end
 
 	function NewNotification:Close()
-		if not NewNotification.Closed then
-			NewNotification.Closed = true
-			Creator.Spawn(function()
-				RootMotor:setGoal({
-					Scale = Spring(1, { frequency = 5 }),
-					Offset = Spring(60, { frequency = 5 }),
-				})
-				task.wait(0.4)
-				if require(Root).UseAcrylic then
-					NewNotification.AcrylicPaint.Model:Destroy()
-				end
-				NewNotification.Holder:Destroy()
-			end)
+		if NewNotification.Closed then return end
+		NewNotification.Closed = true
+		if RootMotor then
+			RootMotor:setGoal({
+				Scale = Spring(1, { frequency = 5 }),
+				Offset = Spring(60, { frequency = 5 }),
+			})
+			task.delay(0.3, Cleanup)
+		else
+			Cleanup()
 		end
 	end
 

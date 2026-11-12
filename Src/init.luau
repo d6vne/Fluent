@@ -50,6 +50,7 @@ local Root = script
 local Components = Root.Components
 
 local Creator = require(Root.Modules.Creator)
+local InputRouter = require(Root.Modules.InputRouter)
 local ElementsTable = require(Root.Elements)
 local Acrylic = require(Root.Modules.Acrylic)
 local Icons = require(Root.Modules.Icons)
@@ -147,6 +148,7 @@ local Library = {
 	UseAcrylic = false,
 	Acrylic = false,
 	Transparency = true,
+	Animations = false,
 	MinimizeKey = Enum.KeyCode.LeftControl,
 
 	GUI = BaseContainer,
@@ -312,6 +314,7 @@ function Library:Window(Config: {
 	Library.UseAcrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Acrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Theme = if typeof(Config.Theme) == "string" then Config.Theme else "Custom"
+	Library.Animations = Config.Animations == true
 
 	if Config.Acrylic then
 		Acrylic.init()
@@ -376,6 +379,7 @@ function Library:Destroy()
 	end
 
 	Creator.Disconnect()
+	InputRouter.Destroy()
 	-- Avoid scheduling one tween per descendant during unload.
 	Library.GUI:Destroy()
 	table.clear(Library.OpenFrames)
@@ -389,7 +393,11 @@ function Library:ToggleAcrylic(Value: boolean)
 	if Library.CreatedWindow then
 		if Library.UseAcrylic then
 			Library.Acrylic = Value
-			Library.CreatedWindow.AcrylicPaint.Model.Transparency = Value and 1 - 1e-7 or 1
+			if Library.CreatedWindow.AcrylicPaint.SetVisibility then
+				Library.CreatedWindow.AcrylicPaint.SetVisibility(Value and not Library.CreatedWindow.Minimized)
+			else
+				Library.CreatedWindow.AcrylicPaint.Model.Transparency = Value and 1 - 1e-7 or 1
+			end
 			if Value then
 				Acrylic.Enable()
 			else

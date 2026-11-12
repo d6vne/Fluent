@@ -1,6 +1,7 @@
 local TweenService, UserInputService = game:GetService("TweenService"), game:GetService("UserInputService")
 local Root = script.Parent.Parent
 local Creator = require(Root.Modules.Creator)
+local InputRouter = require(Root.Modules.InputRouter)
  
 local New = Creator.New
 local Components = Root.Components
@@ -11,6 +12,8 @@ Element.__type = "Toggle"
 
 function Element:New(Idx, Config)
 	local Library = self.Library
+	local ToggleSignals = {}
+	local Destroyed = false
 	assert(Config.Title, "Toggle - Missing Title")
 
 	local Toggle = {
@@ -74,22 +77,18 @@ function Element:New(Idx, Config)
 
 		rawset(Toggle, "Value", Value)
 
-		Creator.Spawn(Creator.OverrideTag, ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
-		Creator.Spawn(Creator.OverrideTag, ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
-
-		ToggleCircle:TweenPosition(
-			UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0),
-			Enum.EasingDirection.Out,
-			Enum.EasingStyle.Quint,
-			.25,
-			true
-		)
-
-		TweenService:Create(
-			ToggleSlider,
-			TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = Toggle.Value and 0 or 1 }
-		):Play()
+		Creator.OverrideTag(ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
+		Creator.OverrideTag(ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
+		local Position = UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0)
+		if Library.Animations then
+			ToggleCircle:TweenPosition(Position, Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.18, true)
+			TweenService:Create(ToggleSlider, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+				BackgroundTransparency = Toggle.Value and 0 or 1,
+			}):Play()
+		else
+			ToggleCircle.Position = Position
+			ToggleSlider.BackgroundTransparency = Toggle.Value and 0 or 1
+		end
 
 		ToggleCircle.ImageTransparency = Toggle.Value and 0 or 0.5
 
@@ -102,13 +101,24 @@ function Element:New(Idx, Config)
 	end
 
 	function Toggle:Destroy()
+		if Destroyed then
+			return
+		end
+		Destroyed = true
+		Creator.DisconnectOwner(ToggleSignals)
+		if type(Toggle.Keybind) == "table" and type(Toggle.Keybind.Destroy) == "function" then
+			Toggle.Keybind:Destroy()
+		end
+		Creator.RemoveThemeObject(ToggleFrame.Frame, true)
 		ToggleFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
 	Creator.AddSignal(ToggleFrame.Frame.MouseButton1Click, function()
-		Toggle:SetValue(not Toggle.Value)
-	end)
+		if not Destroyed then
+			Toggle:SetValue(not Toggle.Value)
+		end
+	end, ToggleSignals)
 
 	Toggle.Keybind = setmetatable({}, { -- TODO: Rewrite this piece of shit
 		__call = function(_, self, Idx, Config)
@@ -123,6 +133,10 @@ function Element:New(Idx, Config)
 			}
 
 			local Picking = false
+			local PendingKey
+			local CaptureReadyAt = 0
+			local KeybindSignals = {}
+			local KeybindDestroyed = false
 
 			local KeybindDisplayLabel = New("TextLabel", {
 				FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
@@ -204,7 +218,9 @@ function Element:New(Idx, Config)
 							or Key == "RightMousebutton"
 								and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
 					else
-						return UserInputService:IsKeyDown(Enum.KeyCode[self.Value])
+						local KeyName = typeof(self.Value) == "EnumItem" and self.Value.Name or self.Value
+						local KeyCode = typeof(KeyName) == "string" and Enum.KeyCode[KeyName] or nil
+						return KeyCode ~= nil and UserInputService:IsKeyDown(KeyCode)
 					end
 				else
 					return self.Toggled
@@ -242,75 +258,72 @@ function Element:New(Idx, Config)
 			end
 		
 			function Keybind:Destroy()
-				KeybindDisplayFrame.Size = UDim2.new()
-				KeybindDisplayFrame.Position = UDim2.new()
+				if KeybindDestroyed then return end
+				KeybindDestroyed = true
+				Picking = false
+				InputRouter.Unregister(Keybind)
+				Creator.DisconnectOwner(KeybindSignals)
+				Creator.RemoveThemeObject(KeybindDisplayFrame, true)
 				KeybindDisplayFrame:Destroy()
 				Library.Options[Idx] = nil
 			end
 		
 			Creator.AddSignal(KeybindDisplayFrame.InputBegan, function(Input)
-				if
-					Input.UserInputType == Enum.UserInputType.MouseButton1
-					or Input.UserInputType == Enum.UserInputType.Touch
-				then
-					Picking = true
-					KeybindDisplayLabel.Text = "..."
-		
-					wait(0.2)
-		
-					UserInputService.InputBegan:Once(function(Input)
-						local Key
-		
-						if Input.UserInputType == Enum.UserInputType.Keyboard then
-							Key = Input.KeyCode.Name
-						elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
-							Key = "LeftMousebutton"
-						elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
-							Key = "RightMousebutton"
-						end
-		
-						UserInputService.InputEnded:Once(function(Input)
-							if (Input.KeyCode.Name == Key
-								or Key == "LeftMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Key == "RightMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton2)
-								and not Library.Unloaded
-							then
-								Picking = false
-		
-								Keybind:SetValue(Key)
-		
-								Library:SafeCallback(self.ChangedCallback, Input.KeyCode or Input.UserInputType)
-								Library:SafeCallback(self.Changed, Input.KeyCode or Input.UserInputType)
-							end
-						end)
-					end)
+				if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+					and Input.UserInputType ~= Enum.UserInputType.Touch then
+					return
 				end
-			end)
-		
-			Creator.AddSignal(UserInputService.InputBegan, function(Input)
-				if not Picking and not UserInputService:GetFocusedTextBox() then
-					if Keybind.Mode == "Toggle" then
-						local Key = Keybind.Value
+				Picking = true
+				PendingKey = nil
+				CaptureReadyAt = os.clock() + 0.15
+				KeybindDisplayLabel.Text = "..."
+			end, KeybindSignals)
 
-						if Key == "LeftMousebutton" or Key == "RightMousebutton" then
-							if
-								Key == "LeftMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton1
-								or Key == "RightMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton2
-							then
-								Keybind.Toggled = not Keybind.Toggled
-								Keybind:DoClick()
-							end
-						elseif Input.UserInputType == Enum.UserInputType.Keyboard then
-							if Input.KeyCode.Name == Key or Input.KeyCode == Key then
-								Keybind.Toggled = not Keybind.Toggled
-								Keybind:DoClick()
-							end
-						end
+			local function MatchesInput(Input, Key)
+				if Key == "LeftMousebutton" then
+					return Input.UserInputType == Enum.UserInputType.MouseButton1
+				elseif Key == "RightMousebutton" then
+					return Input.UserInputType == Enum.UserInputType.MouseButton2
+				end
+				return Input.UserInputType == Enum.UserInputType.Keyboard
+					and (Input.KeyCode.Name == Key or Input.KeyCode == Key)
+			end
+
+			InputRouter.Register(Keybind, function(Input)
+				if KeybindDestroyed or Library.Unloaded then return end
+				if Picking then
+					if os.clock() < CaptureReadyAt then return end
+					if Input.UserInputType == Enum.UserInputType.Keyboard then
+						PendingKey = Input.KeyCode.Name
+					elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
+						PendingKey = "LeftMousebutton"
+					elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
+						PendingKey = "RightMousebutton"
+					end
+					return
+				end
+				if Keybind.Mode == "Toggle" and not UserInputService:GetFocusedTextBox()
+					and MatchesInput(Input, Keybind.Value) then
+					Keybind.Toggled = not Keybind.Toggled
+					Keybind:DoClick()
+				end
+			end, function(Input)
+				if KeybindDestroyed or not Picking or not PendingKey then return end
+				if MatchesInput(Input, PendingKey) then
+					local Key = PendingKey
+					PendingKey = nil
+					Picking = false
+					Keybind:SetValue(Key)
+					if typeof(Keybind.ChangedCallback) == "function" then
+						Library:SafeCallback(Keybind.ChangedCallback, Key)
+					end
+					if typeof(Keybind.Changed) == "function" then
+						Library:SafeCallback(Keybind.Changed, Key)
 					end
 				end
 			end)
-	
-			Creator.AddSignal(KeybindDisplayFrame:GetPropertyChangedSignal("AbsoluteSize"), UpdateTogglePosition)
+
+			Creator.AddSignal(KeybindDisplayFrame:GetPropertyChangedSignal("AbsoluteSize"), UpdateTogglePosition, KeybindSignals)
 
 			Library.Options[Idx] = Keybind
 

@@ -360,7 +360,9 @@ function Element:New(Idx, Config)
 			local Values = {}
 
 			for Value, Bool in next, Dropdown.Value do
-				Values[#Values + 1] = Value
+				if Bool then
+					Values[#Values + 1] = Value
+				end
 			end
 
 			return Values
@@ -451,34 +453,28 @@ function Element:New(Idx, Config)
 				SetSelTransparency(Selected and 0 or 1)
 			end
 
-			Creator.AddSignal(ButtonLabel.InputBegan, function(Input)
-				if
-					Input.UserInputType == Enum.UserInputType.MouseButton1
-					or Input.UserInputType == Enum.UserInputType.Touch
-				then
-					local Try = not Selected
-
-					if Dropdown:GetActiveValues() == 1 and not Try and not Config.AllowNull then
-					else
-						if Config.Multi then
-							Selected = Try
-							Dropdown.Value[Value] = Selected and true or nil
-
-							if typeof(Dropdown.Callback) == "function" then
-								Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-							end
-							if typeof(Dropdown.Changed) == "function" then
-								Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
-							end
-						else
-							Selected = Try
-							Dropdown:SetValue(Selected and Value or nil)
-						end
-
-						Table:UpdateButton()
-						Dropdown:Display()
-					end
+			-- Use the full option button as the mouse/touch hit target.
+			Creator.AddSignal(Button.MouseButton1Click, function()
+				local Try = not Selected
+				if Dropdown:GetActiveValues() == 1 and not Try and not Config.AllowNull then
+					return
 				end
+
+				if Config.Multi then
+					Selected = Try
+					Dropdown.Value[Value] = Selected and true or nil
+					if typeof(Dropdown.Callback) == "function" then
+						Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
+					end
+					if typeof(Dropdown.Changed) == "function" then
+						Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+					end
+				else
+					Dropdown:SetValue(Try and Value or nil)
+				end
+
+				Table:UpdateButton()
+				Dropdown:Display()
 			end, Table.Connections)
 
 			ButtonLabel.Text = Dropdown.Displayer(Value)
@@ -530,8 +526,8 @@ function Element:New(Idx, Config)
 		if Dropdown.Multi then
 			local nTable = {}
 
-			for Value, Bool in next, Val do
-				if table.find(Dropdown.Values, Value) then
+			for Value, Bool in next, Val or {} do
+				if Bool and table.find(Dropdown.Values, Value) then
 					nTable[Value] = true
 				end
 			end
@@ -590,7 +586,6 @@ function Element:New(Idx, Config)
 				Defaults[#Defaults + 1] = Indx
 			end
 		end
-		table.clear(Config.Default)
 	elseif type(Config.Default) == "number" and Dropdown.Values[Config.Default] ~= nil then
 		Defaults[#Defaults + 1] = Config.Default
 	else
