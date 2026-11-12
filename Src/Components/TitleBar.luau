@@ -137,6 +137,8 @@ return function(Config)
 		BackgroundTransparency = 1,
 		ThemeTag = {
 			TextColor3 = "Text",
+			-- Light needs fully opaque black; dark presets keep subdued subtitle.
+			TextTransparency = "SubtitleTransparency",
 		}
 	})
 
