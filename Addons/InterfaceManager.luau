@@ -179,7 +179,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	local ResetButton
 
 	local EditorButton = Section:AddButton({
-		Title = "Customize colors",
+		Title = "Edit custom palette",
 		Callback = function()
 			EditorOpen = not EditorOpen
 			for _, Picker in pairs(Pickers) do
@@ -208,8 +208,10 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 					return
 				end
 				if typeof(Value) ~= "Color3" then return end
+				local Hex = Value:ToHex()
+				if Settings.CustomPalette[Key] == Hex then return end
 
-				Settings.CustomPalette[Key] = Value:ToHex()
+				Settings.CustomPalette[Key] = Hex
 				ApplyCustomPalette(Library, Settings.CustomPalette)
 				Settings.Theme = "Custom"
 				ThemeOption:SetValue("Custom")
