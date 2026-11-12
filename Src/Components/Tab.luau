@@ -174,41 +174,31 @@ end
 
 function TabModule:SelectTab(Tab)
 	local Window = TabModule.Window
-
-	TabModule.SelectedTab = Tab
-
-	for _, TabObject in next, TabModule.Tabs do
-		TabObject.SetTransparency(1)
-		TabObject.Selected = false
+	local SelectedTab = TabModule.Tabs[Tab]
+	if not SelectedTab then
+		return
 	end
 
-	local SelectedTab = TabModule.Tabs[Tab]
-	SelectedTab.SetTransparency(0.89)
-	SelectedTab.Selected = true
+	if TabModule.SelectedTab == Tab then
+		return
+	end
+
+	TabModule.SelectedTab = Tab
+	for Index, TabObject in next, TabModule.Tabs do
+		local IsSelected = Index == Tab
+		TabObject.Selected = IsSelected
+		TabObject.SetTransparency(IsSelected and 0.89 or 1)
+	end
 
 	Window.TabDisplay.Text = SelectedTab.Name
-	Window.SelectorPosMotor:setGoal(Spring(TabModule:GetCurrentTabPos(), { frequency = 6 }))
-
-	Creator.Spawn(function()
-		Window.ContainerHolder.Parent = Window.ContainerAnim
-		
-		Window.ContainerPosMotor:setGoal(Spring(15, { frequency = 10 }))
-		Window.ContainerBackMotor:setGoal(Spring(1, { frequency = 10 }))
-
-		task.wait(0.12)
-
-		for _, Container in next, TabModule.Containers do
-			Container.Visible = false
-		end
-	
-		TabModule.Containers[Tab].Visible = true
-		Window.ContainerPosMotor:setGoal(Spring(0, { frequency = 5 }))
-		Window.ContainerBackMotor:setGoal(Spring(0, { frequency = 8 }))
-
-		task.wait(0.12)
-
-		Window.ContainerHolder.Parent = Window.ContainerCanvas
-	end)
+	Window.SelectorPosMotor:setGoal(Instant(TabModule:GetCurrentTabPos()))
+	-- Immediate page visibility: no delayed workers competing after rapid clicks.
+	for Index, Container in next, TabModule.Containers do
+		Container.Visible = Index == Tab
+	end
+	Window.ContainerPosMotor:setGoal(Instant(0))
+	Window.ContainerBackMotor:setGoal(Instant(0))
+	Window.ContainerHolder.Parent = Window.ContainerCanvas
 end
 
 return TabModule
