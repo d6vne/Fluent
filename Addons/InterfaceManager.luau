@@ -9,11 +9,11 @@ local InterfaceManager = {
 }
 
 local PaletteOptions = {
-	{ Key = "FontColor", Title = "Font color" },
-	{ Key = "MainColor", Title = "Main color" },
-	{ Key = "AccentColor", Title = "Accent color" },
-	{ Key = "BackgroundColor", Title = "Background color" },
-	{ Key = "OutlineColor", Title = "Outline color" },
+	{ Key = "FontColor", Title = "Font Color" },
+	{ Key = "MainColor", Title = "Main Color" },
+	{ Key = "AccentColor", Title = "Accent Color" },
+	{ Key = "BackgroundColor", Title = "Background Color" },
+	{ Key = "OutlineColor", Title = "Outline Color" },
 }
 
 local OriginalPalette
@@ -195,7 +195,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	local ResetButton
 
 	local EditorButton = Section:AddButton({
-		Title = "Edit custom palette",
+		Title = "Edit Custom Palette",
 		Callback = function()
 			EditorOpen = not EditorOpen
 			for _, Picker in pairs(Pickers) do
@@ -228,7 +228,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	end
 
 	ResetButton = Section:AddButton({
-		Title = "Reset custom colors",
+		Title = "Reset Custom Colors",
 		Callback = function()
 			Settings.CustomPalette = table.clone(OriginalPalette)
 			ApplyCustomPalette(Library, Settings.CustomPalette)
@@ -264,7 +264,7 @@ function InterfaceManager:BuildInterfaceSection(Tab)
 	})
 
 	local MenuKeybind = Section:AddKeybind("InterfaceManager_MenuKeybind", {
-		Title = "Minimize key",
+		Title = "Minimize Key",
 		Default = Settings.MenuKeybind,
 		ChangedCallback = function(Value)
 			Settings.MenuKeybind = typeof(Value) == "EnumItem" and Value.Name or tostring(Value)
