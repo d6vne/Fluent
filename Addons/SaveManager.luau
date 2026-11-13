@@ -165,6 +165,56 @@ do
 		},
 	}
 
+	local function ValidConfigName(Name)
+		return type(Name) == "string"
+			and Name:match("%S") ~= nil
+			and Name ~= "."
+			and Name ~= ".."
+			and not Name:find("[/\\\\:%*%?%\"<>|]")
+			and not Name:find("..", 1, true)
+	end
+
+	function SaveManager:Delete(Name): (boolean, string?)
+		if not ValidConfigName(Name) then return false, "Invalid config name" end
+		local Path = `{self.Folder}/settings/{Name}.json`
+		if not isfile(Path) then return false, "Config does not exist" end
+		local Success, Err = pcall(delfile, Path)
+		if not Success then return false, tostring(Err) end
+		local AutoloadPath = `{self.Folder}/settings/autoload.txt`
+		if isfile(AutoloadPath) and readfile(AutoloadPath) == Name then
+			pcall(delfile, AutoloadPath)
+		end
+		return true
+	end
+
+	function SaveManager:Rename(OldName, NewName): (boolean, string?)
+		if not ValidConfigName(OldName) or not ValidConfigName(NewName) then
+			return false, "Invalid config name"
+		end
+		if OldName == NewName then return false, "Choose a different name" end
+		local OldPath = `{self.Folder}/settings/{OldName}.json`
+		local NewPath = `{self.Folder}/settings/{NewName}.json`
+		if not isfile(OldPath) then return false, "Config does not exist" end
+		if isfile(NewPath) then return false, "A config with that name already exists" end
+		local ReadSuccess, Data = pcall(readfile, OldPath)
+		if not ReadSuccess then return false, tostring(Data) end
+		local WriteSuccess, WriteError = pcall(writefile, NewPath, Data)
+		if not WriteSuccess then return false, tostring(WriteError) end
+		local DeleteSuccess, DeleteError = pcall(delfile, OldPath)
+		if not DeleteSuccess then
+			pcall(delfile, NewPath)
+			return false, tostring(DeleteError)
+		end
+		local AutoloadPath = `{self.Folder}/settings/autoload.txt`
+		if isfile(AutoloadPath) and readfile(AutoloadPath) == OldName then
+			local AutoloadSuccess, AutoloadError = pcall(writefile, AutoloadPath, NewName)
+			if not AutoloadSuccess then
+				return false, "Renamed config, but failed to update autoload: " .. tostring(AutoloadError)
+			end
+		end
+		return true
+	end
+
 	function SaveManager:SetIgnoreIndexes(list)
 		for _, key in next, list do
 			self.Ignore[key] = true
@@ -177,8 +227,8 @@ do
 	end
 
 	function SaveManager:Save(name): (boolean, string?)
-		if not name then
-			return false, "No config file is selected"
+		if not ValidConfigName(name) then
+			return false, "No valid config file is selected"
 		end
 
 		local fullPath = `{self.Folder}/settings/{name}.json`
@@ -429,6 +479,45 @@ do
 					SubContent = string.format("Overwrote config %q", name),
 					Duration = 7,
 				})
+			end,
+		})
+
+		section:AddButton({
+			Title = "Rename Config",
+			Description = "Rename selected config to the Config Name field",
+			Callback = function()
+				local OldName = SaveManager.Options.SaveManager_ConfigList.Value
+				local NewName = SaveManager.Options.SaveManager_ConfigName.Value
+				local Success, Err = self:Rename(OldName, NewName)
+				self.Library:Notify({
+					Title = "Interface",
+					Content = "Config Loader",
+					SubContent = Success and string.format("Renamed %q to %q", OldName, NewName) or "Failed to rename config: " .. Err,
+					Duration = 7,
+				})
+				if Success then
+					SaveManager.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
+					SaveManager.Options.SaveManager_ConfigList:SetValue(NewName)
+				end
+			end,
+		})
+
+		section:AddButton({
+			Title = "Delete Config",
+			Description = "Permanently delete the selected config",
+			Callback = function()
+				local Name = SaveManager.Options.SaveManager_ConfigList.Value
+				local Success, Err = self:Delete(Name)
+				self.Library:Notify({
+					Title = "Interface",
+					Content = "Config Loader",
+					SubContent = Success and string.format("Deleted config %q", Name) or "Failed to delete config: " .. Err,
+					Duration = 7,
+				})
+				if Success then
+					SaveManager.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
+					SaveManager.Options.SaveManager_ConfigList:SetValue(nil)
+				end
 			end,
 		})
 
