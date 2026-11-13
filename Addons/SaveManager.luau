@@ -171,7 +171,7 @@ do
 			and Name ~= "."
 			and Name ~= ".."
 			and not Name:find("[/\\\\:%*%?%\"<>|]")
-			and not Name:find("%.%.", 1, true)
+			and not Name:find("..", 1, true)
 	end
 
 	function SaveManager:Delete(Name): (boolean, string?)
