@@ -484,7 +484,6 @@ do
 
 		section:AddButton({
 			Title = "Rename Config",
-			Description = "Rename selected config to the Config Name field",
 			Callback = function()
 				local OldName = SaveManager.Options.SaveManager_ConfigList.Value
 				local NewName = SaveManager.Options.SaveManager_ConfigName.Value
@@ -504,7 +503,6 @@ do
 
 		section:AddButton({
 			Title = "Delete Config",
-			Description = "Permanently delete the selected config",
 			Callback = function()
 				local Name = SaveManager.Options.SaveManager_ConfigList.Value
 				local Success, Err = self:Delete(Name)
