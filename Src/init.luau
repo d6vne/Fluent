@@ -50,6 +50,7 @@ local Root = script
 local Components = Root.Components
 
 local Creator = require(Root.Modules.Creator)
+local InputRouter = require(Root.Modules.InputRouter)
 local ElementsTable = require(Root.Elements)
 local Acrylic = require(Root.Modules.Acrylic)
 local Icons = require(Root.Modules.Icons)
@@ -147,6 +148,7 @@ local Library = {
 	UseAcrylic = false,
 	Acrylic = false,
 	Transparency = true,
+	Animations = false,
 	MinimizeKey = Enum.KeyCode.LeftControl,
 
 	GUI = BaseContainer,
@@ -312,6 +314,7 @@ function Library:Window(Config: {
 	Library.UseAcrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Acrylic = if typeof(Config.Acrylic) == "boolean" then Config.Acrylic else false
 	Library.Theme = if typeof(Config.Theme) == "string" then Config.Theme else "Custom"
+	Library.Animations = Config.Animations == true
 
 	if Config.Acrylic then
 		Acrylic.init()
@@ -355,89 +358,65 @@ function Library:CreateWindow(Config)
 end
 
 function Library:SetTheme(Name: string)
-	if Library.CreatedWindow and table.find(Library.Themes, Name) then
-		Library.Theme = Name
-		Creator.UpdateTheme()
-		Library.ThemeChanged:Fire(Name)
+	if Library.Unloaded or not Library.CreatedWindow then return end
+	-- Custom is the editor's runtime palette, not a built-in preset.
+	if Name ~= "Custom" and not table.find(Library.Themes, Name) then return end
+	local Theme = Themes[Name]
+	if not Theme then return end
+
+	Library.Theme = Name
+	-- Paint every registered component in one synchronous update.
+	Creator.UpdateTheme()
+
+	-- The full-window surface must always agree with the active theme.
+	-- Explicitly sync the canonical surface instead of relying only on the
+	-- generic registry (which can miss objects removed by legacy callers).
+	local Paint = Library.CreatedWindow.AcrylicPaint
+	if Paint then
+		if Paint.Background and Paint.Background.BackgroundColor3 ~= Theme.AcrylicMain then
+			Paint.Background.BackgroundColor3 = Theme.AcrylicMain
+		end
+		if Paint.Border and Paint.Border.Color ~= Theme.AcrylicBorder then
+			Paint.Border.Color = Theme.AcrylicBorder
+		end
 	end
+
+	Library.ThemeChanged:Fire(Name)
 end
 
 function Library:Destroy()
-	if Library.CreatedWindow then
-		Library.Unloaded = true
-		Library.Loaded = false
-
-		Library.OnUnload:Fire(tick())
-
-		if Library.UseAcrylic then
-			Library.CreatedWindow.AcrylicPaint.Model:Destroy()
-		end
-
-		Creator.Disconnect()
-
-		for i, v in next, Library.Connections do
-			local type = typeof(v)
-
-			if type == "RBXScriptConnection" and v.Connected then
-				v:Disconnect()
-			end
-		end
-
-		local info, tweenProps, doTween = TweenInfo.new(2 / 3, Enum.EasingStyle.Quint), {}, false
-
-		local function IsA(obj: Object, class: string)
-			local isClass = obj:IsA(class)
-
-			if isClass then
-				doTween = true
-			end
-
-			return isClass
-		end
-
-		for i, v in next, Library.GUI:GetDescendants() do
-			table.clear(tweenProps)
-
-			if IsA(v, "GuiObject") then
-				tweenProps.BackgroundTransparency = 1
-			end
-
-			if IsA(v, "ScrollingFrame") then
-				tweenProps.ScrollBarImageTransparency = 1
-			end
-
-			if IsA(v, "TextLabel") or IsA(v, "TextBox") then
-				tweenProps.TextStrokeTransparency = 1
-				tweenProps.TextTransparency = 1
-			end
-
-			if IsA(v, "UIStroke") then
-				tweenProps.Transparency = 1
-			end
-
-			if IsA(v, "ImageLabel") or IsA(v, "ImageButton") then
-				tweenProps.ImageTransparency = 1
-			end
-
-			if doTween then
-				doTween = false
-				TweenService:Create(v, info, tweenProps):Play()
-			end
-		end
-
-		task.delay(info.Time, function()
-			Library.GUI:Destroy()
-
-			Library.PostUnload:Fire(tick())
-		end)
+	if not Library.CreatedWindow or Library.Unloaded then
+		return
 	end
+
+	Library.Unloaded = true
+	Library.Loaded = false
+	Library.OnUnload:Fire(tick())
+
+	if Library.UseAcrylic and Library.CreatedWindow.AcrylicPaint.Model then
+		Library.CreatedWindow.AcrylicPaint.Model:Destroy()
+	end
+
+	Creator.Disconnect()
+	InputRouter.Destroy()
+	-- Avoid scheduling one tween per descendant during unload.
+	Library.GUI:Destroy()
+	table.clear(Library.OpenFrames)
+	table.clear(Library.Options)
+	Creator.Registry = setmetatable({}, { __mode = "k" })
+	table.clear(Creator.TransparencyMotors)
+	Library.PostUnload:Fire(tick())
 end
 
 function Library:ToggleAcrylic(Value: boolean)
 	if Library.CreatedWindow then
 		if Library.UseAcrylic then
 			Library.Acrylic = Value
-			Library.CreatedWindow.AcrylicPaint.Model.Transparency = Value and 1 - 1e-7 or 1
+			if Library.CreatedWindow.AcrylicPaint.SetVisibility then
+				Library.CreatedWindow.AcrylicPaint.SetVisibility(Value and not Library.CreatedWindow.Minimized)
+			else
+				Library.CreatedWindow.AcrylicPaint.Model.Transparency = Value and 1 - 1e-7 or 1
+			end
 			if Value then
 				Acrylic.Enable()
 			else
@@ -449,7 +428,11 @@ end
 
 function Library:ToggleTransparency(Value: boolean)
 	if Library.CreatedWindow then
-		Library.CreatedWindow.AcrylicPaint.Frame.Background.BackgroundTransparency = Value and 0.35 or 0
+		Library.Transparency = Value
+		-- Exactly one surface draws the window. Changing opacity must never
+		-- introduce an opaque gradient or a second color over the theme.
+		Library.CreatedWindow.AcrylicPaint.Frame.Background.BackgroundTransparency =
+			Value and 0.08 or 0
 	end
 end
 

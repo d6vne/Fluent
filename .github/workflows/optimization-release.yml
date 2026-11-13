@@ -1,0 +1,103 @@
+name: Publish Fluent
+
+on:
+  push:
+    branches:
+      - optimization
+    paths:
+      - "Src/**"
+      - "Addons/**"
+      - "Lune/**"
+      - "rokit.toml"
+      - ".github/workflows/optimization-release.yml"
+
+permissions:
+  contents: write
+
+# Only one publish job may choose the next semantic version at a time.
+concurrency:
+  group: fluent-semver-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'd6vne/Fluent'
+    name: Build and release Fluent
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup RoKit
+        uses: CompeyDev/setup-rokit@v0.1.2
+
+      - name: Install build tools
+        run: |
+          rokit trust rojo-rbx/rojo
+          rokit trust lune-org/lune
+          rokit trust seaofvoices/darklua
+          rokit trust UpliftGames/wally
+          rokit trust JohnnyMorganz/wally-package-types
+          rokit install
+
+      - name: Build Fluent
+        run: lune run Build bundle header=Lune/Build/Header.luau minify=true ci-mode=true
+
+      - name: Publish semantic-version release and retire old optimization tags
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # v0.1.0 is the first stable-named release of this optimized base.
+          # Future successful publishes increment the highest stable SemVer patch.
+          $ExistingTags = @(gh release list --limit 100 --json tagName --jq '.[].tagName')
+          if ($LASTEXITCODE -ne 0) { throw "Could not list releases" }
+
+          $Highest = $null
+          foreach ($ExistingTag in $ExistingTags) {
+            if ($ExistingTag -match '^v\d+\.\d+\.\d+$') {
+              $Candidate = [version]$ExistingTag.Substring(1)
+              if ($null -eq $Highest -or $Candidate -gt $Highest) {
+                $Highest = $Candidate
+              }
+            }
+          }
+
+          if ($null -eq $Highest) {
+            $Version = [version]'0.1.0'
+          } else {
+            $Version = [version]::new($Highest.Major, $Highest.Minor, $Highest.Build + 1)
+          }
+
+          $Tag = "v$($Version.ToString(3))"
+          $Title = "Fluent $Tag"
+          $Notes = "Fluent $Tag. Source: optimization branch, commit $env:GITHUB_SHA. Uses Semantic Versioning (MAJOR.MINOR.PATCH)."
+          Write-Host "Publishing $Title from $env:GITHUB_SHA"
+
+          gh release create $Tag "Distribution/Fluent.luau" "Distribution/Fluent.rbxm" --target "$env:GITHUB_SHA" --title "$Title" --notes "$Notes" --latest
+          if ($LASTEXITCODE -ne 0) { throw "Failed to publish $Tag" }
+
+          # Never remove the old downloadable builds unless the replacement
+          # is already the latest release and has both required assets.
+          $PublishedAssets = @(gh release view $Tag --json assets --jq '.assets[].name')
+          if ($LASTEXITCODE -ne 0 -or $PublishedAssets -notcontains "Fluent.luau" -or $PublishedAssets -notcontains "Fluent.rbxm") {
+            throw "$Tag did not publish both Fluent assets"
+          }
+
+          $LatestTag = gh api "repos/$env:GITHUB_REPOSITORY/releases/latest" --jq '.tag_name'
+          if ($LASTEXITCODE -ne 0 -or $LatestTag -ne $Tag) {
+            throw "Expected $Tag as latest, got $LatestTag. Keeping old releases for safety."
+          }
+
+          foreach ($LegacyTag in $ExistingTags) {
+            if ($LegacyTag -match '^v\d+\.\d+\.\d+-optimization\.\d+$') {
+              Write-Host "Retiring legacy release and tag: $LegacyTag"
+              gh release delete $LegacyTag --yes --cleanup-tag
+              if ($LASTEXITCODE -ne 0) { throw "Could not remove old tag $LegacyTag" }
+            }
+          }
+
+          Write-Host "$Title published and verified. Old optimization release tags retired."

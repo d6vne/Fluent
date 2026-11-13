@@ -1,6 +1,7 @@
-name: Pushed
+name: Fluent Build
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - '**.luau'
@@ -21,7 +22,7 @@ permissions:
 
 jobs:
   build-script:
-    name: Bundle and Upload Fluent Renewed Plus
+    name: Build and upload Fluent artifacts
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -43,13 +44,13 @@ jobs:
       - name: Build
         run: lune run Build bundle header=Lune/Build/Header.luau minify=true ci-mode=true
 
-      - name: Upload Minified Fluent Renewed Plus to Artifacts
+      - name: Upload Fluent script artifact
         uses: actions/upload-artifact@v4
         with:
           name: Fluent.luau
           path: Distribution/Fluent.luau
 
-      - name: Upload Fluent Renewed Plus Model to Artifacts
+      - name: Upload Fluent model artifact
         uses: actions/upload-artifact@v4
         with:
           name: Fluent.rbxm

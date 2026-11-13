@@ -15,6 +15,8 @@ Element.__type = "Colorpicker"
 
 function Element:New(Idx, Config)
 	local Library = self.Library
+	local ColorpickerSignals = {}
+	local Destroyed = false
 	assert(Config.Title, "Colorpicker - Missing Title")
 	assert(Config.Default, "AddColorPicker: Missing default value.")
 
@@ -69,6 +71,18 @@ function Element:New(Idx, Config)
 
 	local function CreateColorDialog()
 		local Dialog = require(Components.Dialog):Create()
+		local DialogSignals = {}
+		local MouseMoveConnection
+		local function AddDialogSignal(Signal, Callback)
+			return Creator.AddSignal(Signal, Callback, DialogSignals)
+		end
+		Dialog.Closing:Connect(function()
+			if MouseMoveConnection then
+				MouseMoveConnection:Disconnect()
+				MouseMoveConnection = nil
+			end
+			Creator.DisconnectOwner(DialogSignals)
+		end)
 		Dialog.Title.Text = Colorpicker.Title
 		Dialog.Root.Size = UDim2.fromOffset(430, 330)
 
@@ -336,7 +350,7 @@ function Element:New(Idx, Config)
 			end
 		end
 
-		Creator.AddSignal(HexInput.Input.FocusLost, function(Enter)
+		AddDialogSignal(HexInput.Input.FocusLost, function(Enter)
 			if Enter then
 				local Success, Result = pcall(Color3.fromHex, HexInput.Input.Text)
 				if Success and typeof(Result) == "Color3" then
@@ -346,7 +360,7 @@ function Element:New(Idx, Config)
 			Display()
 		end)
 
-		Creator.AddSignal(RedInput.Input.FocusLost, function(Enter)
+		AddDialogSignal(RedInput.Input.FocusLost, function(Enter)
 			if Enter then
 				local CurrentColor = GetRGB()
 				local Success, Result = pcall(Color3.fromRGB, RedInput.Input.Text, CurrentColor["G"], CurrentColor["B"])
@@ -359,7 +373,7 @@ function Element:New(Idx, Config)
 			Display()
 		end)
 
-		Creator.AddSignal(GreenInput.Input.FocusLost, function(Enter)
+		AddDialogSignal(GreenInput.Input.FocusLost, function(Enter)
 			if Enter then
 				local CurrentColor = GetRGB()
 				local Success, Result =
@@ -373,7 +387,7 @@ function Element:New(Idx, Config)
 			Display()
 		end)
 
-		Creator.AddSignal(BlueInput.Input.FocusLost, function(Enter)
+		AddDialogSignal(BlueInput.Input.FocusLost, function(Enter)
 			if Enter then
 				local CurrentColor = GetRGB()
 				local Success, Result =
@@ -388,7 +402,7 @@ function Element:New(Idx, Config)
 		end)
 
 		if Config.Transparency then
-			Creator.AddSignal(AlphaInput.Input.FocusLost, function(Enter)
+			AddDialogSignal(AlphaInput.Input.FocusLost, function(Enter)
 				if Enter then
 					pcall(function()
 						local Value = tonumber(AlphaInput.Input.Text)
@@ -431,8 +445,7 @@ function Element:New(Idx, Config)
 			Display()
 		end
 
-		local MouseMoveConnection
-		Creator.AddSignal(SatVibMap.InputBegan, function(Input)
+		AddDialogSignal(SatVibMap.InputBegan, function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1 
 				or Input.UserInputType == Enum.UserInputType.Touch then
 				
@@ -444,7 +457,7 @@ function Element:New(Idx, Config)
 			end
 		end)
 
-		Creator.AddSignal(SatVibMap.InputEnded, function(Input)
+		AddDialogSignal(SatVibMap.InputEnded, function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1
 				or Input.UserInputType == Enum.UserInputType.Touch then
 				
@@ -455,7 +468,7 @@ function Element:New(Idx, Config)
 			end
 		end)
 
-		Creator.AddSignal(HueSlider.InputBegan, function(Input)
+		AddDialogSignal(HueSlider.InputBegan, function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1
 				or Input.UserInputType == Enum.UserInputType.Touch then
 				
@@ -467,7 +480,7 @@ function Element:New(Idx, Config)
 			end
 		end)
 
-		Creator.AddSignal(HueSlider.InputEnded, function(Input)
+		AddDialogSignal(HueSlider.InputEnded, function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1
 				or Input.UserInputType == Enum.UserInputType.Touch then
 				
@@ -479,7 +492,7 @@ function Element:New(Idx, Config)
 		end)
 
 		if Config.Transparency then
-			Creator.AddSignal(TransparencySlider.InputBegan, function(Input)
+			AddDialogSignal(TransparencySlider.InputBegan, function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1
 					or Input.UserInputType == Enum.UserInputType.Touch then
 					
@@ -491,7 +504,7 @@ function Element:New(Idx, Config)
 				end
 			end)
 
-			Creator.AddSignal(TransparencySlider.InputEnded, function(Input)
+			AddDialogSignal(TransparencySlider.InputEnded, function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1
 					or Input.UserInputType == Enum.UserInputType.Touch then
 					
@@ -506,11 +519,19 @@ function Element:New(Idx, Config)
 		Display()
 
 		Dialog:Button("Done", function()
-			Colorpicker:SetValue({ Hue, Sat, Vib }, Transparency)
+			local NewColor = Color3.fromHSV(Hue, Sat, Vib)
+			if Colorpicker.Value:ToHex() ~= NewColor:ToHex()
+				or math.abs(Colorpicker.Transparency - Transparency) > 0.0001 then
+				Colorpicker:SetValue({ Hue, Sat, Vib }, Transparency)
+			end
 		end)
 
 		Dialog:Button("Cancel", function()
-			Colorpicker:SetValue({ OrigHue, OrigSat, OrigVib }, OrigTransparency)
+			-- With UpdateOnChange disabled, the picker has not changed yet.
+			-- Calling SetValue here used to fire a false theme edit on Cancel.
+			if Colorpicker.UpdateOnChange then
+				Colorpicker:SetValue({ OrigHue, OrigSat, OrigVib }, OrigTransparency)
+			end
 		end)
 
 		Dialog:Open()
@@ -523,7 +544,12 @@ function Element:New(Idx, Config)
 		DisplayFrameColor.BackgroundTransparency = Colorpicker.Transparency
 
 		if typeof(Colorpicker.Callback) == "function" then
-			Library:SafeCallback(Colorpicker.Callback, Colorpicker.Value)
+			if Config.ImmediateCallback then
+				local Success, Err = pcall(Colorpicker.Callback, Colorpicker.Value)
+				if not Success then warn("[Fluent] Colorpicker callback:", Err) end
+			else
+				Library:SafeCallback(Colorpicker.Callback, Colorpicker.Value)
+			end
 		end
 		if typeof(Colorpicker.Changed) == "function" then
 			Library:SafeCallback(Colorpicker.Changed, Colorpicker.Value)
@@ -554,13 +580,19 @@ function Element:New(Idx, Config)
 	end
 
 	function Colorpicker:Destroy()
+		if Destroyed then return end
+		Destroyed = true
+		Creator.DisconnectOwner(ColorpickerSignals)
+		Creator.RemoveThemeObject(ColorpickerFrame.Frame, true)
 		ColorpickerFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
 	Creator.AddSignal(ColorpickerFrame.Frame.MouseButton1Click, function()
-		CreateColorDialog()
-	end)
+		if not Destroyed then
+			CreateColorDialog()
+		end
+	end, ColorpickerSignals)
 
 	Colorpicker:Display()
 

@@ -38,19 +38,50 @@ function Element:New(Idx, Config)
 	
 	local SliderDots = table.create(DotCount, Null)
 	local Dragging = table.create(DotCount, Null)
+	local SliderSignals = {}
+	local onInputChanged
+	local ActiveTouch, ActiveChange, ActiveEnd
+
+	local function StopDragging()
+		for Index = 1, DotCount do
+			Dragging[Index] = false
+		end
+		ActiveTouch = nil
+		if ActiveChange then
+			ActiveChange:Disconnect()
+			ActiveChange = nil
+		end
+		if ActiveEnd then
+			ActiveEnd:Disconnect()
+			ActiveEnd = nil
+		end
+	end
 	
 	for i = 1, DotCount do
 		
 		Dragging[i] = false
 		
-		local SliderDot = New("ImageLabel", {
+		-- A real themed shape instead of an asset-tinted image. ImageColor3
+		-- multiplies source pixel colors and can never guarantee the exact
+		-- accent chosen by the active theme.
+		local SliderDot = New("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, -7, 0.5, 0),
 			Size = UDim2.fromOffset(14, 14),
-			Image = "http://www.roblox.com/asset/?id=12266946128",
+			Active = true,
+			ZIndex = 2,
 			ThemeTag = {
-				ImageColor3 = "Accent",
-			}
+				BackgroundColor3 = "Accent",
+			},
+		}, {
+			New("UICorner", {
+				CornerRadius = UDim.new(1, 0),
+			}),
+			New("UIStroke", {
+				Thickness = 1,
+				Transparency = 0.3,
+				ThemeTag = { Color = "AcrylicBorder" },
+			}),
 		})
 		
 		Creator.AddSignal(SliderDot.InputBegan, function(Input)
@@ -59,17 +90,32 @@ function Element:New(Idx, Config)
 				or Input.UserInputType == Enum.UserInputType.Touch
 			then
 				Dragging[i] = true
+				ActiveTouch = Input.UserInputType == Enum.UserInputType.Touch and Input or nil
+				if not ActiveChange then
+					ActiveChange = UserInputService.InputChanged:Connect(function(Changed)
+						if (ActiveTouch and Changed == ActiveTouch)
+							or (not ActiveTouch and Changed.UserInputType == Enum.UserInputType.MouseMovement) then
+							onInputChanged(Changed)
+						end
+					end)
+					ActiveEnd = UserInputService.InputEnded:Connect(function(Ended)
+						if (ActiveTouch and Ended == ActiveTouch)
+							or (not ActiveTouch and Ended.UserInputType == Enum.UserInputType.MouseButton1) then
+							StopDragging()
+						end
+					end)
+				end
 			end
-		end)
+		end, SliderSignals)
 
 		Creator.AddSignal(SliderDot.InputEnded, function(Input)
 			if
 				Input.UserInputType == Enum.UserInputType.MouseButton1
 				or Input.UserInputType == Enum.UserInputType.Touch
 			then
-				Dragging[i] = false
+				StopDragging()
 			end
-		end)
+		end, SliderSignals)
 		
 		SliderDots[i] = SliderDot
 	end
@@ -108,7 +154,7 @@ function Element:New(Idx, Config)
 		}
 	})
 
-	New("Frame", {
+	local SliderTrack = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 4),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
@@ -128,6 +174,23 @@ function Element:New(Idx, Config)
 		SliderFill,
 		SliderRail
 	})
+
+	-- Reapply the visible slider colors in the same theme-change event.
+	-- The Creator registry handles the initial paint; this keeps the track,
+	-- fill and thumbs consistent even after interactions with their GUI state.
+	Creator.AddSignal(Library.ThemeChanged, function()
+		local Accent = Creator.GetThemeProperty("Accent")
+		local Rail = Creator.GetThemeProperty("SliderRail")
+		local Text = Creator.GetThemeProperty("SubText")
+		if Accent then
+			SliderFill.BackgroundColor3 = Accent
+			for _, Dot in ipairs(SliderDots) do
+				Dot.BackgroundColor3 = Accent
+			end
+		end
+		if Rail then SliderTrack.BackgroundColor3 = Rail end
+		if Text then SliderDisplay.TextColor3 = Text end
+	end, SliderSignals)
 
 	function Slider:OnChanged(Func)
 		Slider.Changed = Func
@@ -166,13 +229,11 @@ function Element:New(Idx, Config)
 		end
 	end
 	
-	local onInputChanged
-	
 	if Slider.Ranged then
 		function onInputChanged(Input: InputObject)
 			if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 				if Dragging[1] or Dragging[2] then
-					local SizeScale = math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+					local SizeScale = math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / math.max(SliderRail.AbsoluteSize.X, 1), 0, 1)
 					local Value
 					if Dragging[1] then
 						local Min = Slider.Min + ((Slider.Max - Slider.Min) * SizeScale)
@@ -193,28 +254,32 @@ function Element:New(Idx, Config)
 			if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 				if Dragging[1] then
 					local SizeScale =
-						math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+						math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / math.max(SliderRail.AbsoluteSize.X, 1), 0, 1)
 					Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * SizeScale))
 				end
 			end
 		end
 	end
 	
-	Creator.AddSignal(UserInputService.InputChanged, onInputChanged)
-
 	Creator.AddSignal(SliderDisplay.FocusLost, function()
 		if Slider.Ranged then
 			local Split = string.split(SliderDisplay.Text, " ")
 			local Min = tonumber(Split[1])
 			local Max = tonumber(Split[2])
-			local Value = NumberRange.new(Min, Max)
-			Slider:SetValue(Value or Slider.Value)
+			if Min and Max then
+				Slider:SetValue(NumberRange.new(math.min(Min, Max), math.max(Min, Max)))
+			else
+				SliderDisplay.Text = tostring(Slider.Value)
+			end
 		else
 			Slider:SetValue(tonumber(SliderDisplay.Text) or Slider.Value)
 		end
-	end)
+	end, SliderSignals)
 
 	function Slider:Destroy()
+		StopDragging()
+		Creator.DisconnectOwner(SliderSignals)
+		Creator.RemoveThemeObject(SliderFrame.Frame, true)
 		SliderFrame:Destroy()
 		Library.Options[Idx] = nil
 	end

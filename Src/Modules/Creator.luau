@@ -12,10 +12,11 @@ local function getLibrary()
 end
 
 local Creator = {
-	Registry = {},
+	Registry = setmetatable({}, { __mode = "k" }),
+	ActiveTheme = "Dark",
 	Signals = {},
 	Threads = {},
-	TransparencyMotors = {},
+	TransparencyMotors = setmetatable({}, { __mode = "k" }),
 	DefaultProperties = {
 		ScreenGui = {
 			ResetOnSpawn = false,
@@ -97,7 +98,7 @@ end
 
 local function ApplyCustomProps(Object, Props: { [string]: any }?)
 	if typeof(Props) == "table" and Props.ThemeTag then
-		Creator.Spawn(Creator.AddThemeObject, Object, Props.ThemeTag)
+		Creator.AddThemeObject(Object, Props.ThemeTag)
 	end
 end
 
@@ -140,8 +141,18 @@ function Creator.Delay(Delay, Function, ...)
 	end
 end
 
-function Creator.AddSignal(Signal: RBXScriptSignal, Function)
-	table.insert(Creator.Signals, Signal:Connect(Function))
+function Creator.AddSignal(Signal: RBXScriptSignal, Function, Owner: { RBXScriptConnection }?)
+	local Connection = Signal:Connect(Function)
+	table.insert(Owner or Creator.Signals, Connection)
+	return Connection
+end
+
+function Creator.DisconnectOwner(Connections: { RBXScriptConnection })
+	for Index = #Connections, 1, -1 do
+		local Connection = Connections[Index]
+		Connection:Disconnect()
+		Connections[Index] = nil
+	end
 end
 
 function Creator.Disconnect()
@@ -155,8 +166,7 @@ function Creator.Disconnect()
 end
 
 function Creator.GetThemeProperty(Property)
-	local Theme = getLibrary().Theme
-	local CurrentTheme = Themes[Theme]
+	local CurrentTheme = Themes[Creator.ActiveTheme]
 
 	if CurrentTheme and CurrentTheme[Property] ~= nil then
 		return CurrentTheme[Property]
@@ -165,48 +175,38 @@ function Creator.GetThemeProperty(Property)
 	return Themes["Dark"][Property]
 end
 
+local function ApplyThemeProperties(Object: Instance, Properties)
+	for Property, ThemeKey in next, Properties do
+		local Value = Creator.GetThemeProperty(ThemeKey)
+		if Value ~= nil and Object[Property] ~= Value then
+			Object[Property] = Value
+		end
+	end
+end
+
 function Creator.UpdateTheme(RegistryIndex: Instance?)
 	if Creator.Theme.Updating then
 		Creator.Theme.Updated:Wait()
 	end
 
 	Creator.Theme.Updating = true
+	Creator.ActiveTheme = getLibrary().Theme
 
-	local Theme = getLibrary().Theme
-	local CurrentThemeTable = Themes[Theme] or Themes["Dark"]
-	local DarkThemeTable = Themes["Dark"]
-
-	local function GetThemeProp(ColorIdx)
-		local val = CurrentThemeTable[ColorIdx]
-		if val ~= nil then
-			return val
-		end
-		return DarkThemeTable[ColorIdx]
-	end
-
-	if typeof(RegistryIndex) == "Instance" and Creator.Registry[RegistryIndex] then
-		for Property, ColorIdx in next, Creator.Registry[RegistryIndex].Properties do
-			local val = GetThemeProp(ColorIdx)
-			Creator.Spawn(function()
-				RegistryIndex[Property] = val
-			end)
+	if typeof(RegistryIndex) == "Instance" then
+		local Properties = Creator.Registry[RegistryIndex]
+		if Properties then
+			ApplyThemeProperties(RegistryIndex, Properties)
 		end
 	else
-		for _, Object in next, Creator.Registry do
-			local obj = Object.Object
-			for Property, ColorIdx in next, Object.Properties do
-				local val = GetThemeProp(ColorIdx)
-				Creator.Spawn(function()
-					obj[Property] = val
-				end)
-			end
+		for Object, Properties in next, Creator.Registry do
+			ApplyThemeProperties(Object, Properties)
 		end
 
-		local transparencyVal = GetThemeProp("ElementTransparency")
-		for Idx: number, Motor in next, Creator.TransparencyMotors do
-			Creator.Spawn(function()
-				Motor:setGoal(Flipper.Instant.new(transparencyVal))
-			end)
+		local Transparency = Creator.GetThemeProperty("ElementTransparency")
+		if Transparency ~= nil then
+			for _, Motor in next, Creator.TransparencyMotors do
+				Motor:setGoal(Flipper.Instant.new(Transparency))
+			end
 		end
 	end
 
@@ -215,46 +215,52 @@ function Creator.UpdateTheme(RegistryIndex: Instance?)
 end
 
 function Creator.AddThemeObject(Object: Instance, Properties: { [string]: any })
-	local Idx = #Creator.Registry + 1
-	local Data = {
-		Object = Object,
-		Properties = Properties,
-		Idx = Idx,
-	}
-
-	Creator.Registry[Object] = Data
-	Creator.UpdateTheme(Object)
-
+	Creator.Registry[Object] = Properties
+	ApplyThemeProperties(Object, Properties)
 	return Object
 end
 
+function Creator.RemoveThemeObject(Object: Instance, IncludeDescendants: boolean?)
+	Creator.Registry[Object] = nil
+	Creator.TransparencyMotors[Object] = nil
+
+	if IncludeDescendants then
+		for _, Descendant in ipairs(Object:GetDescendants()) do
+			Creator.Registry[Descendant] = nil
+			Creator.TransparencyMotors[Descendant] = nil
+		end
+	end
+end
+
 function Creator.OverrideTag(Object, Properties)
-	Creator.Registry[Object].Properties = Properties
+	Creator.Registry[Object] = Properties
 	Creator.UpdateTheme(Object)
 end
 
+-- Build an instance off-tree, so property changes do not trigger a full UI layout
+-- until its children and theme tags are ready. Parent is committed last.
 function Creator.New(Name, Properties: { [string]: any }?, Children: { [number]: Instance }?): Instance
 	local Object = Instance.new(Name)
+	local Parent = Properties and Properties.Parent
 
-	-- Default properties
-	for Name, Value in next, Creator.DefaultProperties[Name] or {} do
-		Object[Name] = Value
+	for Property, Value in next, Creator.DefaultProperties[Name] or {} do
+		Object[Property] = Value
 	end
 
-	-- Properties
-	for Name, Value in next, Properties or {} do
-		if Name ~= "ThemeTag" then
-			Object[Name] = Value
+	for Property, Value in next, Properties or {} do
+		if Property ~= "ThemeTag" and Property ~= "Parent" then
+			Object[Property] = Value
 		end
 	end
 
-	-- Children
 	for _, Child in next, Children or {} do
 		Child.Parent = Object
 	end
 
 	ApplyCustomProps(Object, Properties)
-
+	if Parent ~= nil then
+		Object.Parent = Parent
+	end
 	return Object
 end
 
@@ -273,7 +279,7 @@ function Creator.SpringMotor(
 	end)
 
 	if ResetOnThemeChange then
-		Creator.TransparencyMotors[#Creator.TransparencyMotors + 1] = Motor
+		Creator.TransparencyMotors[Instance] = Motor
 	end
 
 	local function SetValue(Value, Ignore: boolean?)

@@ -6,6 +6,8 @@ return function(Title, Desc, Parent, Hover, Config)
 	local Element = {
 		CreatedAt = tick()
 	}
+	local ElementSignals = {}
+	local Destroyed = false
 
 	Config = typeof(Config) == "table" and Config or {}
 
@@ -104,6 +106,10 @@ return function(Title, Desc, Parent, Hover, Config)
 	end
 
 	function Element:Destroy()
+		if Destroyed then return end
+		Destroyed = true
+		Creator.DisconnectOwner(ElementSignals)
+		Creator.RemoveThemeObject(Element.Frame, true)
 		Element.Frame:Destroy()
 	end
 
@@ -111,27 +117,31 @@ return function(Title, Desc, Parent, Hover, Config)
 	Element:SetDesc(Desc)
 	
 	if Hover then
-		local Themes = Root.Themes
-		local Motor, SetTransparency = Creator.SpringMotor(
-			Creator.GetThemeProperty("ElementTransparency"),
-			Element.Frame,
-			"BackgroundTransparency",
-			false,
-			true
-		)
+		local SetTransparency
+		if require(Root).Animations then
+			local _, SetGoal = Creator.SpringMotor(
+				Creator.GetThemeProperty("ElementTransparency"),
+				Element.Frame, "BackgroundTransparency", false, true
+			)
+			SetTransparency = SetGoal
+		else
+			SetTransparency = function(Value)
+				Element.Frame.BackgroundTransparency = Value
+			end
+		end
 
 		Creator.AddSignal(Element.Frame.MouseEnter, function()
 			SetTransparency(Creator.GetThemeProperty("ElementTransparency") - Creator.GetThemeProperty("HoverChange"))
-		end)
+		end, ElementSignals)
 		Creator.AddSignal(Element.Frame.MouseLeave, function()
 			SetTransparency(Creator.GetThemeProperty("ElementTransparency"))
-		end)
+		end, ElementSignals)
 		Creator.AddSignal(Element.Frame.MouseButton1Down, function()
 			SetTransparency(Creator.GetThemeProperty("ElementTransparency") + Creator.GetThemeProperty("HoverChange"))
-		end)
+		end, ElementSignals)
 		Creator.AddSignal(Element.Frame.MouseButton1Up, function()
 			SetTransparency(Creator.GetThemeProperty("ElementTransparency") - Creator.GetThemeProperty("HoverChange"))
-		end)
+		end, ElementSignals)
 	end
 
 	return setmetatable(Element, {

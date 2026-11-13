@@ -4,13 +4,36 @@ local AcrylicBlur = require(script.Parent.AcrylicBlur)
 
 local New = Creator.New
 
-return function(props)
+-- One visible, theme-colored window surface. The old implementation stacked
+-- three full-size backgrounds (one with a gradient), then set all of them
+-- opaque when Transparency was disabled. That hid AcrylicMain behind the
+-- gradient and made palette changes look inverted or inconsistent.
+return function()
 	local AcrylicPaint = {}
+
+	-- Expose the real painted surface and its stroke so SetTheme can
+	-- deterministically update the full-window background in the same call.
+	local Border = New("UIStroke", {
+		Thickness = 1,
+		Transparency = 0.45,
+		ThemeTag = { Color = "AcrylicBorder" },
+	})
+	local Background = New("Frame", {
+		Name = "Background",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		ThemeTag = { BackgroundColor3 = "AcrylicMain" },
+	}, {
+		New("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		Border,
+	})
+	AcrylicPaint.Background = Background
+	AcrylicPaint.Border = Border
 
 	AcrylicPaint.Frame = New("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 0.9,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, {
 		New("ImageLabel", {
@@ -21,95 +44,15 @@ return function(props)
 			Size = UDim2.new(1, 120, 1, 116),
 			Position = UDim2.new(0.5, 0, 0.5, 0),
 			BackgroundTransparency = 1,
-			ImageColor3 = Color3.fromRGB(0, 0, 0),
+			ImageColor3 = Color3.new(0, 0, 0),
 			ImageTransparency = 0.7,
 		}),
-
-		New("UICorner", {
-			CornerRadius = UDim.new(0, 8),
-		}),
-
-		New("Frame", {
-			BackgroundTransparency = 0.45,
-			Size = UDim2.fromScale(1, 1),
-			Name = "Background",
-			ThemeTag = {
-				BackgroundColor3 = "AcrylicMain",
-			},
-		}, {
-			New("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-			}),
-		}),
-
-		New("Frame", {
-			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-			BackgroundTransparency = 0.4,
-			Size = UDim2.fromScale(1, 1),
-		}, {
-			New("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-			}),
-
-			New("UIGradient", {
-				Rotation = 90,
-				ThemeTag = {
-					Color = "AcrylicGradient",
-				},
-			}),
-		}),
-
-		New("ImageLabel", {
-			Image = "rbxassetid://9968344105",
-			ImageTransparency = 1 - 1e-7,
-			ScaleType = Enum.ScaleType.Tile,
-			TileSize = UDim2.new(0, 128, 0, 128),
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-		}, {
-			New("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-			}),
-		}),
-
-		New("ImageLabel", {
-			Image = "rbxassetid://9968344227",
-			ImageTransparency = 0.9,
-			ScaleType = Enum.ScaleType.Tile,
-			TileSize = UDim2.new(0, 128, 0, 128),
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-			ThemeTag = {
-				ImageTransparency = "AcrylicNoise",
-			},
-		}, {
-			New("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-			}),
-		}),
-
-		New("Frame", {
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 2,
-		}, {
-			New("UICorner", {
-				CornerRadius = UDim.new(0, 8),
-			}),
-			New("UIStroke", {
-				Transparency = 0.5,
-				Thickness = 1,
-				ThemeTag = {
-					Color = "AcrylicBorder",
-				},
-			}),
-		}),
+		Background,
 	})
 
-	local Blur
-
+	-- The optional blur still works, but never adds a second tinted surface.
 	if require(Root).UseAcrylic then
-		Blur = AcrylicBlur()
+		local Blur = AcrylicBlur()
 		Blur.Frame.Parent = AcrylicPaint.Frame
 		AcrylicPaint.Model = Blur.Model
 		AcrylicPaint.AddParent = Blur.AddParent

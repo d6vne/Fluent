@@ -16,24 +16,43 @@ local TabModule = {
 }
 
 function TabModule:Init(Window)
-	TabModule.Window = Window
-	return TabModule
+	local Tabs = setmetatable({
+		Window = Window,
+		Tabs = {},
+		Containers = {},
+		SelectedTab = 0,
+		TabCount = 0,
+	}, { __index = TabModule })
+
+	-- Sidebar labels and icons are the navigation text, not tab content.
+	-- Keep them synchronized with the active palette even if a prior GUI
+	-- property update retained their previous white color.
+	Creator.AddSignal(require(Root).ThemeChanged, function()
+		local Color = Creator.GetThemeProperty("Text")
+		if not Color then return end
+		for _, Tab in next, Tabs.Tabs do
+			if Tab.Label then Tab.Label.TextColor3 = Color end
+			if Tab.Icon then Tab.Icon.ImageColor3 = Color end
+		end
+	end)
+
+	return Tabs
 end
 
 function TabModule:GetCurrentTabPos()
-	local TabHolderPos = TabModule.Window.TabHolder.AbsolutePosition.Y
-	local TabPos = TabModule.Tabs[TabModule.SelectedTab].Frame.AbsolutePosition.Y
+	local TabHolderPos = self.Window.TabHolder.AbsolutePosition.Y
+	local TabPos = self.Tabs[self.SelectedTab].Frame.AbsolutePosition.Y
 
 	return TabPos - TabHolderPos
 end
 
 function TabModule:New(Title, Icon, Parent)
 	local Library = require(Root)
-	local Window = TabModule.Window
+	local Window = self.Window
 	local Elements = Library.Elements
 
-	TabModule.TabCount = TabModule.TabCount + 1
-	local TabIndex = TabModule.TabCount
+	self.TabCount = self.TabCount + 1
+	local TabIndex = self.TabCount
 
 	local Tab = {
 		Selected = false,
@@ -47,6 +66,45 @@ function TabModule:New(Title, Icon, Parent)
 		ImageRectSize = Vector2.zero
 	}
 
+	local TabLabel = New("TextLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = Icon ~= nil and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0, 12, 0.5, 0),
+		Text = Title,
+		RichText = true,
+		TextColor3 = Creator.GetThemeProperty("Text"),
+		TextTransparency = 0,
+		FontFace = Font.new(
+			"rbxasset://fonts/families/GothamSSm.json",
+			Enum.FontWeight.Regular,
+			Enum.FontStyle.Normal
+		),
+		TextSize = 12,
+		TextXAlignment = "Left",
+		TextYAlignment = "Center",
+		Size = UDim2.new(1, -12, 1, 0),
+		BackgroundTransparency = 1,
+		ThemeTag = {
+			TextColor3 = "Text",
+		},
+	})
+
+	local TabIcon = New("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		BackgroundTransparency = 1,
+		ImageRectOffset = Icon and Icon.ImageRectOffset or Vector2.zero,
+		ImageRectSize = Icon and Icon.ImageRectSize or Vector2.zero,
+		Image = Icon and Icon.Image or nil,
+		ImageColor3 = Creator.GetThemeProperty("Text"),
+		ThemeTag = {
+			ImageColor3 = "Text",
+		},
+	})
+
+	Tab.Label = TabLabel
+	Tab.Icon = TabIcon
+
 	Tab.Frame = New("TextButton", {
 		Size = UDim2.new(1, 0, 0, 34),
 		BackgroundTransparency = 1,
@@ -58,39 +116,8 @@ function TabModule:New(Title, Icon, Parent)
 		New("UICorner", {
 			CornerRadius = UDim.new(0, 6),
 		}),
-		New("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = Icon ~= nil and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0, 12, 0.5, 0),
-			Text = Title,
-			RichText = true,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextTransparency = 0,
-			FontFace = Font.new(
-				"rbxasset://fonts/families/GothamSSm.json",
-				Enum.FontWeight.Regular,
-				Enum.FontStyle.Normal
-			),
-			TextSize = 12,
-			TextXAlignment = "Left",
-			TextYAlignment = "Center",
-			Size = UDim2.new(1, -12, 1, 0),
-			BackgroundTransparency = 1,
-			ThemeTag = {
-				TextColor3 = "Text",
-			},
-		}),
-		New("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(16, 16),
-			Position = UDim2.new(0, 8, 0.5, 0),
-			BackgroundTransparency = 1,
-			ImageRectOffset = Icon and Icon.ImageRectOffset or Vector2.zero,
-			ImageRectSize = Icon and Icon.ImageRectSize or Vector2.zero,
-			Image = Icon and Icon.Image or nil,
-			ThemeTag = {
-				ImageColor3 = "Text",
-			},
-		}),
+		TabLabel,
+		TabIcon,
 	})
 
 	local ContainerLayout = New("UIListLayout", {
@@ -143,11 +170,11 @@ function TabModule:New(Title, Icon, Parent)
 		Tab.SetTransparency(Tab.Selected and 0.85 or 0.89)
 	end)
 	Creator.AddSignal(Tab.Frame.MouseButton1Click, function()
-		TabModule:SelectTab(TabIndex)
+		self:SelectTab(TabIndex)
 	end)
 
-	TabModule.Containers[TabIndex] = Tab.ContainerFrame
-	TabModule.Tabs[TabIndex] = Tab
+	self.Containers[TabIndex] = Tab.ContainerFrame
+	self.Tabs[TabIndex] = Tab
 
 	Tab.Container = Tab.ContainerFrame
 	Tab.ScrollFrame = Tab.Container
@@ -173,42 +200,32 @@ function TabModule:New(Title, Icon, Parent)
 end
 
 function TabModule:SelectTab(Tab)
-	local Window = TabModule.Window
-
-	TabModule.SelectedTab = Tab
-
-	for _, TabObject in next, TabModule.Tabs do
-		TabObject.SetTransparency(1)
-		TabObject.Selected = false
+	local Window = self.Window
+	local SelectedTab = self.Tabs[Tab]
+	if not SelectedTab then
+		return
 	end
 
-	local SelectedTab = TabModule.Tabs[Tab]
-	SelectedTab.SetTransparency(0.89)
-	SelectedTab.Selected = true
+	if self.SelectedTab == Tab then
+		return
+	end
+
+	self.SelectedTab = Tab
+	for Index, TabObject in next, self.Tabs do
+		local IsSelected = Index == Tab
+		TabObject.Selected = IsSelected
+		TabObject.SetTransparency(IsSelected and 0.89 or 1)
+	end
 
 	Window.TabDisplay.Text = SelectedTab.Name
-	Window.SelectorPosMotor:setGoal(Spring(TabModule:GetCurrentTabPos(), { frequency = 6 }))
-
-	Creator.Spawn(function()
-		Window.ContainerHolder.Parent = Window.ContainerAnim
-		
-		Window.ContainerPosMotor:setGoal(Spring(15, { frequency = 10 }))
-		Window.ContainerBackMotor:setGoal(Spring(1, { frequency = 10 }))
-
-		task.wait(0.12)
-
-		for _, Container in next, TabModule.Containers do
-			Container.Visible = false
-		end
-	
-		TabModule.Containers[Tab].Visible = true
-		Window.ContainerPosMotor:setGoal(Spring(0, { frequency = 5 }))
-		Window.ContainerBackMotor:setGoal(Spring(0, { frequency = 8 }))
-
-		task.wait(0.12)
-
-		Window.ContainerHolder.Parent = Window.ContainerCanvas
-	end)
+	Window.SelectorPosMotor:setGoal(Instant(self:GetCurrentTabPos()))
+	-- Immediate page visibility: no delayed workers competing after rapid clicks.
+	for Index, Container in next, self.Containers do
+		Container.Visible = Index == Tab
+	end
+	Window.ContainerPosMotor:setGoal(Instant(0))
+	Window.ContainerBackMotor:setGoal(Instant(0))
+	Window.ContainerHolder.Parent = Window.ContainerCanvas
 end
 
 return TabModule
